@@ -156,13 +156,21 @@ def extra_feeds():
     return feeds
 
 
+
 def store(article):
     response = SESSION.post(
         URL + '/rest/v1/articles?on_conflict=url',
-        json=article, headers=HEADERS, timeout=25,
+        json=article,
+        headers={
+            **HEADERS,
+            'Accept': 'application/json',
+        },
+        timeout=25,
     )
     if not response.ok:
-        raise RuntimeError(f'{response.status_code}: {response.text[:350]}')
+        raise RuntimeError(
+            f'{response.status_code}: {response.text[:350]}'
+        )
 
 
 def main():
