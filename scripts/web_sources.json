@@ -1,0 +1,14 @@
+[
+  {"source":"Ministère de la Culture — Rapports", "url":"https://www.culture.gouv.fr/rechercher-une-publication-du-ministere-de-la-culture/rapports", "orchestra":"Secteur orchestral français", "enabled":true, "max_items":25},
+  {"source":"SNAM-CGT — Spectacle vivant", "url":"https://www.snam-cgt.org/spectacle-vivant/actus-spectacle-vivant/", "orchestra":"Secteur orchestral français", "enabled":true, "max_items":25},
+  {"source":"Ministère de la Culture", "url":"https://www.culture.gouv.fr/", "orchestra":"Secteur orchestral français", "enabled":true, "max_items":15},
+  {"source":"data.gouv.fr", "url":"https://www.data.gouv.fr/", "orchestra":"Secteur orchestral français", "enabled":true, "max_items":15},
+  {"source":"Cour des comptes", "url":"https://www.ccomptes.fr/", "orchestra":"Secteur orchestral français", "enabled":true, "max_items":15},
+  {"source":"Légifrance", "url":"https://www.legifrance.gouv.fr/", "orchestra":"Secteur orchestral français", "enabled":true, "max_items":15},
+  {"source":"ONPL", "url":"https://www.onpl.fr/", "orchestra":"ONPL", "enabled":true, "max_items":20},
+  {"source":"Orchestre de Paris", "url":"https://www.orchestredeparis.com/", "orchestra":"Orchestre de Paris", "enabled":true, "max_items":20},
+  {"source":"Orchestre national de Lille", "url":"https://www.onlille.com/", "orchestra":"Orchestre national de Lille", "enabled":true, "max_items":20},
+  {"source":"Orchestre national de Lyon", "url":"https://www.auditorium-lyon.com/", "orchestra":"Orchestre national de Lyon", "enabled":true, "max_items":20},
+  {"source":"Orchestre national de Bretagne", "url":"https://www.orchestrenationaldebretagne.bzh/", "orchestra":"Orchestre national de Bretagne", "enabled":true, "max_items":20},
+  {"source":"Orchestre national de Cannes", "url":"https://www.orchestre-cannes.com/", "orchestra":"Orchestre national de Cannes", "enabled":true, "max_items":20}
+]
