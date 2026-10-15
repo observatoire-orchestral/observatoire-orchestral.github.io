@@ -117,7 +117,7 @@ def normalize(entry, orchestra, fallback_source):
         'category': category(title + ' ' + summary),
         'published_at': published(entry),
         'is_auto': True,
-        'review_status': 'unreviewed',
+        'review_status': 'validated',
     }
 
 
