@@ -131,10 +131,11 @@ def read_feed(feed_url, orchestra, fallback_source, max_items=15):
             yield article
 
 
+
 def google_news(query, orchestra):
     feed_url = ('https://news.google.com/rss/search?q='
-                + quote(query + ' when:30d') + '&hl=fr&gl=FR&ceid=FR:fr')
-    yield from read_feed(feed_url, orchestra, 'Google Actualités')
+                + quote(query + ' when:365d') + '&hl=fr&gl=FR&ceid=FR:fr')
+    yield from read_feed(feed_url, orchestra, 'Google Actualités', max_items=100)
 
 
 def extra_feeds():
