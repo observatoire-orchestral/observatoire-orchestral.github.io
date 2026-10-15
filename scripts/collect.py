@@ -1,14 +1,21 @@
-"""Collecte RSS via Google News, sans clé IA payante. Exécution GitHub Actions."""
+"""Observatoire SUD ONPL — public web/RSS monitoring, no paid API.
+
+Collects Google News RSS searches (orchestra and sector), plus optional direct RSS/Atom
+feeds configured in sources.json. It does not crawl the whole web or bypass paywalls.
+"""
+import html
+import json
 import os
 import re
-import time
-import html
 import sys
+import time
 from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
+from pathlib import Path
 from urllib.parse import quote, urlparse
 
-import requests
 import feedparser
+import requests
 
 URL = os.environ['SUPABASE_URL'].rstrip('/')
 KEY = os.environ['SUPABASE_SERVICE_ROLE_KEY']
@@ -18,6 +25,8 @@ HEADERS = {
     'Content-Type': 'application/json',
     'Prefer': 'resolution=ignore-duplicates,return=minimal',
 }
+SESSION = requests.Session()
+SESSION.headers.update({'User-Agent': 'Observatoire-SUD-ONPL/2.0 (public RSS monitoring)'})
 
 ORCHESTRAS = {
     'ONPL': '"Orchestre National des Pays de la Loire"',
@@ -37,81 +46,157 @@ ORCHESTRAS = {
     'Orchestre national de Cannes': '"Orchestre national de Cannes"',
 }
 
-TERMS = '(budget OR subvention OR grève OR syndicat OR recrutement OR suppression OR emploi OR musicien OR déficit OR restructuration)'
+ORCHESTRA_TERMS = '(budget OR subvention OR grève OR syndicat OR recrutement OR suppression OR emploi OR musicien OR déficit OR restructuration OR communiqué OR rapport)'
+SECTOR = 'Secteur orchestral français'
+SECTOR_QUERIES = [
+    '"orchestres permanents" (budget OR financement OR emploi OR syndicat)',
+    '"musiciens d’orchestre" (conditions de travail OR salaire OR emploi OR grève)',
+    '"orchestres symphoniques" (subventions OR financement OR crise OR budget)',
+    '"spectacle vivant" "orchestre" (financement OR emploi OR réforme)',
+    '"ministère de la Culture" orchestres (budget OR financement OR rapport)',
+    '"collectivités territoriales" orchestres (subvention OR budget)',
+    '"convention collective" musiciens orchestre',
+    '"SNAM-CGT" orchestre',
+    '"CGT Spectacle" orchestre',
+    '"SUD Culture" orchestre',
+    '"Cour des comptes" orchestre rapport',
+    '"DRAC" orchestre subvention',
+]
 TOPICS = [
-    ('Budget et subventions', ['budget', 'subvention', 'déficit', 'financement', 'économie', 'coupe budgétaire']),
-    ('Emploi et recrutement', ['recrut', 'poste', 'emploi', 'licenci', 'effectif', 'suppression']),
-    ('Mobilisation et grève', ['grève', 'manifest', 'mobilis', 'préavis', 'syndica']),
-    ('Conditions de travail', ['salaire', 'conditions de travail', 'temps de travail', 'rémunération']),
-    ('Gouvernance', ['direction', 'directeur général', 'gouvernance', 'réorganisation', 'restructur']),
+    ('Budget et subventions', ['budget', 'subvention', 'déficit', 'financement', 'coupe budgétaire', 'dotation']),
+    ('Emploi et recrutement', ['recrut', 'poste', 'emploi', 'licenci', 'effectif', 'suppression', 'concours']),
+    ('Mobilisation et grève', ['grève', 'manifest', 'mobilis', 'préavis', 'syndica', 'pétition']),
+    ('Conditions de travail', ['salaire', 'conditions de travail', 'temps de travail', 'rémunération', 'convention collective']),
+    ('Gouvernance', ['direction', 'directeur général', 'gouvernance', 'réorganisation', 'restructur', 'nomination']),
 ]
 
 
-def clean(s):
-    return re.sub(r'\s+', ' ', html.unescape(re.sub(r'<[^>]+>', ' ', s or ''))).strip()[:1200]
+def clean(value):
+    return re.sub(r'\s+', ' ', html.unescape(re.sub(r'<[^>]+>', ' ', str(value or '')))).strip()[:1200]
 
 
-def topic(s):
-    s = s.lower()
+def category(text):
+    lower = text.casefold()
     for name, words in TOPICS:
-        if any(word in s for word in words):
+        if any(word in lower for word in words):
             return name
     return 'Autres'
 
 
-def fetch(name, query):
-    feed = 'https://news.google.com/rss/search?q=' + quote(query + ' when:30d') + '&hl=fr&gl=FR&ceid=FR:fr'
-    response = requests.get(feed, timeout=25, headers={'User-Agent': 'SUDCT44-Observatoire/1.0 (RSS monitoring)'})
+def published(entry):
+    # feedparser struct_time is UTC. calendar.timegm avoids local-time conversion.
+    import calendar
+    stamp = entry.get('published_parsed') or entry.get('updated_parsed')
+    if stamp:
+        return datetime.fromtimestamp(calendar.timegm(stamp), timezone.utc).isoformat()
+    raw = entry.get('published') or entry.get('updated')
+    if raw:
+        try:
+            return parsedate_to_datetime(raw).astimezone(timezone.utc).isoformat()
+        except (TypeError, ValueError, OverflowError):
+            pass
+    return None
+
+
+def normalize(entry, orchestra, fallback_source):
+    title = clean(entry.get('title'))
+    link = (entry.get('link') or '').strip()
+    if not title or urlparse(link).scheme not in ('http', 'https'):
+        return None
+    summary = clean(entry.get('summary') or entry.get('description'))
+    source_info = entry.get('source') or {}
+    source = clean(source_info.get('title') if hasattr(source_info, 'get') else '') or fallback_source
+    return {
+        'url': link,
+        'title': title,
+        'summary': summary,
+        'source': source[:200],
+        'orchestra': orchestra,
+        'category': category(title + ' ' + summary),
+        'published_at': published(entry),
+        'is_auto': True,
+        'review_status': 'unreviewed',
+    }
+
+
+def read_feed(feed_url, orchestra, fallback_source, max_items=15):
+    response = SESSION.get(feed_url, timeout=25)
     response.raise_for_status()
     parsed = feedparser.parse(response.content)
+    if parsed.bozo and not parsed.entries:
+        raise RuntimeError('Invalid RSS/Atom response')
+    for entry in parsed.entries[:max_items]:
+        article = normalize(entry, orchestra, fallback_source)
+        if article:
+            yield article
 
-    for entry in parsed.entries[:15]:
-        title = clean(entry.get('title', ''))
-        link = entry.get('link', '')
-        if not title or urlparse(link).scheme not in ('http', 'https'):
+
+def google_news(query, orchestra):
+    feed_url = ('https://news.google.com/rss/search?q='
+                + quote(query + ' when:30d') + '&hl=fr&gl=FR&ceid=FR:fr')
+    yield from read_feed(feed_url, orchestra, 'Google Actualités')
+
+
+def extra_feeds():
+    path = Path(__file__).with_name('sources.json')
+    if not path.exists():
+        return []
+    data = json.loads(path.read_text(encoding='utf-8'))
+    if not isinstance(data, list):
+        raise ValueError('sources.json must contain a JSON list')
+    feeds = []
+    for item in data:
+        if not isinstance(item, dict):
             continue
+        feed_url = item.get('url', '')
+        if urlparse(feed_url).scheme != 'https':
+            raise ValueError('RSS feed URL must use HTTPS')
+        feeds.append((feed_url, item.get('orchestra') or SECTOR,
+                      item.get('source') or urlparse(feed_url).netloc))
+    return feeds
 
-        summary = clean(entry.get('summary', ''))
-        published = None
-        if entry.get('published_parsed'):
-            published = datetime.fromtimestamp(
-                __import__('calendar').timegm(entry.published_parsed), timezone.utc
-            ).isoformat()
-        source = entry.get('source', {}).get('title', 'Google Actualités')
 
-        yield {
-            'url': link,
-            'title': title,
-            'summary': summary,
-            'source': clean(source)[:200],
-            'orchestra': name,
-            'category': topic(title + ' ' + summary),
-            'published_at': published,
-            'is_auto': True,
-            'review_status': 'unreviewed',
-        }
+def store(article):
+    response = SESSION.post(
+        URL + '/rest/v1/articles?on_conflict=url',
+        json=article, headers=HEADERS, timeout=25,
+    )
+    if not response.ok:
+        raise RuntimeError(f'{response.status_code}: {response.text[:350]}')
 
 
 def main():
-    count = 0
+    proposed = 0
     errors = []
-    for name, query in ORCHESTRAS.items():
+    searches = [(name, query + ' ' + ORCHESTRA_TERMS)
+                for name, query in ORCHESTRAS.items()]
+    searches.extend((SECTOR, query) for query in SECTOR_QUERIES)
+    for orchestra, query in searches:
         try:
-            for article in fetch(name, query + ' ' + TERMS):
-                response = requests.post(
-                    URL + '/rest/v1/articles?on_conflict=url',
-                    json=article,
-                    headers=HEADERS,
-                    timeout=25,
-                )
-                if not response.ok:
-                    raise RuntimeError(f'{response.status_code}: {response.text[:300]}')
-                count += 1
+            for article in google_news(query, orchestra):
+                store(article)
+                proposed += 1
         except Exception as exc:
-            errors.append(f'{name}: {exc}')
+            errors.append(f'{orchestra} / {query[:55]}: {exc}')
             print('ERROR', errors[-1], file=sys.stderr)
         time.sleep(0.5)
-    print(f'Collecte terminée : {count} entrées proposées (doublons ignorés), {len(errors)} erreurs')
+
+    try:
+        feeds = extra_feeds()
+    except Exception as exc:
+        errors.append(f'sources.json: {exc}')
+        feeds = []
+    for feed_url, orchestra, source in feeds:
+        try:
+            for article in read_feed(feed_url, orchestra, source, max_items=40):
+                store(article)
+                proposed += 1
+        except Exception as exc:
+            errors.append(f'RSS {feed_url}: {exc}')
+            print('ERROR', errors[-1], file=sys.stderr)
+        time.sleep(0.5)
+
+    print(f'Collecte terminée : {proposed} entrées proposées (doublons ignorés), {len(errors)} erreurs')
     if errors:
         sys.exit(1)
 
