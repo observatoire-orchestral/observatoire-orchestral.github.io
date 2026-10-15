@@ -3,7 +3,7 @@
     "source": "Opéra National de Bordeaux — archives publiques",
     "sitemap": "https://www.opera-bordeaux.com/sitemap.xml",
     "orchestra": "Orchestre national de Bordeaux Aquitaine",
-    "enabled": false,
+    "enabled": true,
     "max_urls": 300,
     "max_pages": 30
   },
@@ -11,7 +11,7 @@
     "source": "Bordeaux Métropole — documents publics",
     "sitemap": "https://www.bordeaux-metropole.fr/sitemap.xml",
     "orchestra": "Secteur orchestral français",
-    "enabled": false,
+    "enabled": true,
     "max_urls": 500,
     "max_pages": 30
   }
