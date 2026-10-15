@@ -1,6 +1,6 @@
 // Ces valeurs sont PUBLIQUES et peuvent figurer dans GitHub Pages.
 // Ne mettez JAMAIS la clé service_role ici.
 window.SUDCT_CONFIG = {
-  supabaseUrl: "https://gliwmverhopnsommdjic.supabase.co/rest/v1/",
-  supabaseAnonKey: "sb_publishable_DhDYYam1gMmb9ntUNhrKKA_t5z7oRN7"
+  supabaseUrl: "https://tcyzmwwbugmndiyjhhse.supabase.co",
+  supabaseAnonKey: "sb_publishable_rHUV8-iw-o9BK_UbMUwSUA_6_6-WdO7"
 };
