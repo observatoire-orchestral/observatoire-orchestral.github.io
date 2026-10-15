@@ -117,10 +117,7 @@
       return;
     }
 
-    if (!profile?.approved) {
-      show('pending', true);
-      return;
-    }
+    
 
     isAdmin = profile.role === 'admin';
 
