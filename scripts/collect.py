@@ -49,6 +49,8 @@ ORCHESTRAS = {
 ORCHESTRA_TERMS = '(budget OR subvention OR grève OR syndicat OR recrutement OR suppression OR emploi OR musicien OR déficit OR restructuration OR communiqué OR rapport)'
 SECTOR = 'Secteur orchestral français'
 SECTOR_QUERIES = [
+    
+    'site:sudouest.fr "Opéra de Bordeaux" (subvention OR budget OR financement OR suppression)',
     '"orchestres permanents" (budget OR financement OR emploi OR syndicat)',
     '"musiciens d’orchestre" (conditions de travail OR salaire OR emploi OR grève)',
     '"orchestres symphoniques" (subventions OR financement OR crise OR budget)',
