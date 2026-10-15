@@ -202,6 +202,12 @@ def main():
     except Exception as exc:
         print(f'WEB WARNING: {exc}', file=sys.stderr)
 
+    try:
+        from documentary import discover as run_documentary
+        proposed += run_documentary(store, SESSION)
+    except Exception as exc:
+        print(f'DOCUMENTARY WARNING: {exc}', file=sys.stderr)
+
     print(f'Collecte terminée : {proposed} entrées proposées (doublons ignorés), {len(errors)} erreurs')
     if errors:
         sys.exit(1)
