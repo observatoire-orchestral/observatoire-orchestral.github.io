@@ -1,23 +1,493 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-const $ = id => document.getElementById(id);
-const cfg = window.SUDCT_CONFIG || {};
-const configured = /^https:\/\//.test(cfg.supabaseUrl) && !cfg.supabaseAnonKey?.startsWith('REMPLACER');
-const sb = configured ? createClient(cfg.supabaseUrl, cfg.supabaseAnonKey) : null;
-let currentUser = null, role = 'viewer', rows = [], limit = 40;
-const topics = ['Budget et subventions','Emploi et recrutement','Conditions de travail','Mobilisation et grève','Gouvernance','Autres'];
-const esc = x => String(x ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-function msg(s,error=false){$('message').textContent=s;$('message').className='msg'+(error?' danger':'');}
-function hideMsg(){$('message').classList.add('hidden');}
-function safeUrl(s){try{const u=new URL(s);return ['https:','http:'].includes(u.protocol)?u.href:'#';}catch{return '#';}}
-function date(s){return s?new Date(s).toLocaleDateString('fr-FR'):'';}
-function setVisibility(){ $('setup').classList.toggle('hidden',configured);$('login').classList.toggle('hidden',!configured||!!currentUser);$('app').classList.toggle('hidden',!currentUser);}
-async function auth(action){const email=$('email').value.trim(),password=$('password').value; if(!email){msg('Saisissez votre adresse e-mail.',true);return;}let result;if(action==='signin')result=await sb.auth.signInWithPassword({email,password});if(action==='signup')result=await sb.auth.signUp({email,password});if(action==='reset')result=await sb.auth.resetPasswordForEmail(email,{redirectTo:location.href.split('#')[0]});if(result.error)msg(result.error.message,true);else msg(action==='signup'?'Compte créé. Vérifiez votre e-mail de confirmation (si activé).':action==='reset'?'Vérifiez votre boîte mail pour réinitialiser le mot de passe.':'Connexion réussie.');}
-$('signin').onclick=()=>auth('signin');$('signup').onclick=()=>auth('signup');$('reset').onclick=()=>auth('reset');$('signout').onclick=()=>sb.auth.signOut();$('refresh').onclick=()=>load();$('more').onclick=()=>{limit+=40;render();};
-['search','orchestra','topic','status'].forEach(id=>$(id).addEventListener(id==='search'?'input':'change',()=>{limit=40;render();}));
-function render(){const q=$('search').value.toLocaleLowerCase('fr'),o=$('orchestra').value,t=$('topic').value,s=$('status').value;const filtered=rows.filter(r=>(!q||[r.title,r.summary,r.orchestra,r.topic].join(' ').toLocaleLowerCase('fr').includes(q))&&(!o||r.orchestra===o)&&(!t||r.topic===t)&&(!s||r.review_status===s));$('count').textContent=`${filtered.length} résultat(s) · ${rows.length} articles chargés (les 500 plus récents)`;$('more').classList.toggle('hidden',filtered.length<=limit);$('stats').innerHTML=[['Articles',rows.length],['Non examinés',rows.filter(r=>r.review_status==='pending').length],['Validés',rows.filter(r=>r.review_status==='approved').length],['Rejetés',rows.filter(r=>r.review_status==='rejected').length]].map(([n,v])=>`<div class="stat"><span>${n}</span><strong>${v}</strong></div>`).join('');$('articles').innerHTML=filtered.slice(0,limit).map(r=>`<article class="article"><span class="tag">${esc(r.orchestra)}</span><span class="tag">${esc(r.topic)}</span><span class="tag ${r.review_status==='approved'?'ok':r.review_status==='rejected'?'bad':'warn'}">${r.review_status==='approved'?'Validé':r.review_status==='rejected'?'Rejeté':'Non examiné'}</span><h3>${esc(r.title)}</h3><p class="muted">${esc(r.source_name)} · ${date(r.published_at||r.created_at)} · ${r.is_auto?'Collecte automatique':'Ajout manuel'}</p><p>${esc(r.summary||'Résumé indisponible.')}</p><a href="${esc(safeUrl(r.url))}" target="_blank" rel="noopener noreferrer">Consulter la source originale ↗</a>${['admin','reviewer'].includes(role)?`<div class="actions"><button data-id="${esc(r.id)}" data-state="approved">Valider</button><button data-id="${esc(r.id)}" data-state="rejected">Rejeter</button><button data-id="${esc(r.id)}" data-state="pending">Remettre en attente</button></div>`:''}</article>`).join('')||'<p>Aucun article correspondant.</p>';
-$('articles').querySelectorAll('button[data-id]').forEach(b=>b.onclick=()=>review(b.dataset.id,b.dataset.state));}
-async function review(id,state){const {error}=await sb.from('articles').update({review_status:state,reviewed_by:currentUser.id,reviewed_at:state==='pending'?null:new Date().toISOString()}).eq('id',id);if(error)msg(error.message,true);else{const r=rows.find(x=>x.id===id);if(r){r.review_status=state;}render();}}
-async function load(){hideMsg();const [{data:profile,error:pe},{data,error}]=await Promise.all([sb.from('profiles').select('role').eq('id',currentUser.id).single(),sb.from('articles').select('*').order('published_at',{ascending:false,nullsFirst:false}).limit(500)]);if(pe)msg('Profil indisponible : '+pe.message,true);role=profile?.role||'viewer';$('identity').textContent=`${currentUser.email} · ${role}`;if(error){msg('Chargement impossible : '+error.message,true);return;}rows=data||[];const options=(id,vals)=>{const v=$(id).value;$(id).innerHTML=`<option value="">${id==='orchestra'?'Tous les orchestres':'Tous les thèmes'}</option>`+[...new Set(vals.filter(Boolean))].sort((a,b)=>a.localeCompare(b,'fr')).map(x=>`<option value="${esc(x)}">${esc(x)}</option>`).join('');$(id).value=v;};options('orchestra',rows.map(r=>r.orchestra));options('topic',[...topics,...rows.map(r=>r.topic)]);render();}
-$('export').onclick=()=>{const cols=['published_at','orchestra','topic','title','summary','source_name','url','review_status'];const csv=[cols.join(';'),...rows.map(r=>cols.map(k=>'"'+String(r[k]??'').replace(/"/g,'""')+'"').join(';'))].join('\r\n');const blob=new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='veille-sudct44.csv';a.click();URL.revokeObjectURL(a.href);};
-if(configured){sb.auth.onAuthStateChange((_event,session)=>{currentUser=session?.user||null;setVisibility();if(currentUser)load();});sb.auth.getSession().then(({data})=>{currentUser=data.session?.user||null;setVisibility();if(currentUser)load();});}setVisibility();
-if('serviceWorker' in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{});
+
+/* Observatoire SUD ONPL */
+(() => {
+  'use strict';
+
+  const $ = id => document.getElementById(id);
+  const show = (id, yes) => $(id).classList.toggle('hidden', !yes);
+
+  const notice = (msg, error = false) => {
+    $('notice').textContent = msg;
+    $('notice').className = msg
+      ? 'notice' + (error ? ' error' : '')
+      : '';
+  };
+
+  const conf = window.SUDCT_CONFIG || window.SUD_CONFIG || {};
+
+  if (
+    !conf.supabaseUrl?.startsWith('https://') ||
+    !conf.supabaseAnonKey ||
+    /^(PASTE_|REMPLACER|YOUR_)/i.test(conf.supabaseAnonKey) ||
+    !window.supabase
+  ) {
+    show('setup', true);
+    return;
+  }
+
+  const db = window.supabase.createClient(
+    conf.supabaseUrl,
+    conf.supabaseAnonKey,
+    {
+      auth: {
+        flowType: 'pkce',
+        detectSessionInUrl: true
+      }
+    }
+  );
+
+  let currentUser = null;
+  let isAdmin = false;
+  let records = [];
+  let shown = 0;
+
+  const pageSize = 40;
+
+  const statusText = {
+    unreviewed: 'Non examiné',
+    validated: 'Validé',
+    rejected: 'Rejeté'
+  };
+
+  const esc = s => String(s ?? '').replace(
+    /[&<>"']/g,
+    c => ({
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#39;'
+    }[c])
+  );
+
+  function validUrl(s) {
+    try {
+      const u = new URL(s);
+      return ['http:', 'https:'].includes(u.protocol)
+        ? u.href
+        : '#';
+    } catch {
+      return '#';
+    }
+  }
+
+  function account() {
+    $('account').replaceChildren();
+
+    if (!currentUser) return;
+
+    const b = document.createElement('button');
+    b.className = 'secondary';
+    b.textContent = 'Déconnexion';
+    b.onclick = () => db.auth.signOut();
+
+    $('account').append(b);
+  }
+
+  async function boot() {
+    notice('');
+
+    const { data: { user }, error } = await db.auth.getUser();
+
+    if (error && error.name !== 'AuthSessionMissingError') {
+      console.warn(error);
+    }
+
+    currentUser = user;
+    account();
+
+    show('auth', !user);
+    show('pending', false);
+    show('dashboard', false);
+
+    if (!user) return;
+
+    const { data: profile, error: pe } = await db
+      .from('profiles')
+      .select('approved,role')
+      .eq('id', user.id)
+      .single();
+
+    if (pe) {
+      notice(
+        'Impossible de vérifier votre compte : ' + pe.message,
+        true
+      );
+      show('pending', true);
+      return;
+    }
+
+    if (!profile?.approved) {
+      show('pending', true);
+      return;
+    }
+
+    isAdmin = profile.role === 'admin';
+
+    show('dashboard', true);
+    await load();
+  }
+
+  $('loginForm').addEventListener('submit', async e => {
+    e.preventDefault();
+
+    const { error } = await db.auth.signInWithPassword({
+      email: $('email').value.trim(),
+      password: $('password').value
+    });
+
+    if (error) {
+      notice(error.message, true);
+    } else {
+      await boot();
+    }
+  });
+
+  $('signup').onclick = async () => {
+    const email = $('email').value.trim();
+    const password = $('password').value;
+
+    if (!email || !password) {
+      notice('Saisissez votre e-mail et votre mot de passe.', true);
+      return;
+    }
+
+    const { error } = await db.auth.signUp({
+      email,
+      password,
+      options: {
+        emailRedirectTo: location.origin + location.pathname
+      }
+    });
+
+    notice(
+      error
+        ? error.message
+        : 'Inscription envoyée. Confirmez votre e-mail, puis attendez la validation de votre compte.',
+      !!error
+    );
+  };
+
+  $('reset').onclick = async () => {
+    const email = $('email').value.trim();
+
+    if (!email) {
+      notice('Saisissez votre adresse e-mail.', true);
+      return;
+    }
+
+    const { error } = await db.auth.resetPasswordForEmail(
+      email,
+      {
+        redirectTo: location.origin + location.pathname
+      }
+    );
+
+    notice(
+      error
+        ? error.message
+        : 'Si ce compte existe, un e-mail de réinitialisation a été envoyé.',
+      !!error
+    );
+  };
+
+  db.auth.onAuthStateChange(event => {
+    if (event === 'PASSWORD_RECOVERY') {
+      setTimeout(async () => {
+        const pw = prompt(
+          'Nouveau mot de passe (au moins 6 caractères) :'
+        );
+
+        if (pw) {
+          const { error } = await db.auth.updateUser({
+            password: pw
+          });
+
+          notice(
+            error ? error.message : 'Mot de passe mis à jour.',
+            !!error
+          );
+        }
+      }, 0);
+    }
+
+    if (
+      event === 'SIGNED_IN' ||
+      event === 'SIGNED_OUT' ||
+      event === 'USER_UPDATED'
+    ) {
+      setTimeout(boot, 0);
+    }
+  });
+
+  $('refresh').onclick = boot;
+  $('reload').onclick = load;
+
+  async function load() {
+    notice('');
+
+    let all = [];
+    let offset = 0;
+
+    while (true) {
+      const { data, error } = await db
+        .from('articles')
+        .select(
+          'id,title,url,source,published_at,found_at,orchestra,category,summary,review_status'
+        )
+        .order('published_at', {
+          ascending: false,
+          nullsFirst: false
+        })
+        .range(offset, offset + 499);
+
+      if (error) {
+        notice('Erreur de lecture : ' + error.message, true);
+        return;
+      }
+
+      all.push(...(data || []));
+
+      if (!data || data.length < 500) break;
+
+      offset += 500;
+
+      if (offset >= 5000) {
+        notice(
+          'Affichage limité aux 5 000 articles les plus récents.'
+        );
+        break;
+      }
+    }
+
+    records = all;
+    populate();
+    shown = pageSize;
+    render();
+  }
+
+  function populate() {
+    const fields = [
+      [
+        'orchestra',
+        [...new Set(
+          records.map(x => x.orchestra).filter(Boolean)
+        )]
+      ],
+      [
+        'category',
+        [...new Set(
+          records.map(x => x.category).filter(Boolean)
+        )]
+      ]
+    ];
+
+    for (const [id, values] of fields) {
+      const sel = $(id);
+      const old = sel.value;
+
+      sel.replaceChildren(new Option('Tous', ''));
+
+      values
+        .sort((a, b) => a.localeCompare(b, 'fr'))
+        .forEach(x => sel.add(new Option(x, x)));
+
+      sel.value = old;
+    }
+  }
+
+  function filtered() {
+    const q = $('search').value
+      .trim()
+      .toLocaleLowerCase('fr');
+
+    return records.filter(a =>
+      (
+        !q ||
+        [a.title, a.summary, a.source, a.orchestra]
+          .some(x =>
+            String(x || '')
+              .toLocaleLowerCase('fr')
+              .includes(q)
+          )
+      ) &&
+      (
+        !$('orchestra').value ||
+        a.orchestra === $('orchestra').value
+      ) &&
+      (
+        !$('category').value ||
+        a.category === $('category').value
+      ) &&
+      (
+        !$('status').value ||
+        a.review_status === $('status').value
+      )
+    );
+  }
+
+  function render() {
+    const items = filtered();
+
+    $('total').textContent = records.length;
+
+    $('unreviewed').textContent = records.filter(
+      x => x.review_status === 'unreviewed'
+    ).length;
+
+    $('orchCount').textContent = new Set(
+      records
+        .map(x => x.orchestra)
+        .filter(x => x && x !== 'Autres orchestres')
+    ).size;
+
+    $('count').textContent =
+      `${items.length} résultat(s)`;
+
+    const root = $('articles');
+    root.replaceChildren();
+
+    for (const a of items.slice(0, shown)) {
+      const el = document.createElement('article');
+      el.className = 'card';
+
+      const date = a.published_at
+        ? new Date(a.published_at).toLocaleDateString('fr-FR')
+        : 'Date inconnue';
+
+      el.innerHTML = `
+        <div class="meta">
+          ${esc(date)} · ${esc(a.source || 'Source non renseignée')}
+        </div>
+        <h2>
+          <a href="${esc(validUrl(a.url))}"
+             target="_blank"
+             rel="noopener noreferrer">
+            ${esc(a.title)}
+          </a>
+        </h2>
+        <span class="pill">
+          ${esc(a.orchestra || 'Autres orchestres')}
+        </span>
+        <span class="pill">
+          ${esc(a.category || 'Général')}
+        </span>
+        <p>${esc(a.summary || '')}</p>
+        <div class="review">
+          <span class="status">
+            Statut : ${esc(
+              statusText[a.review_status] || a.review_status
+            )}
+          </span>
+        </div>
+      `;
+
+      if (isAdmin) {
+        const row = el.querySelector('.review');
+
+        for (const [st, label] of [
+          ['validated', 'Valider'],
+          ['rejected', 'Rejeter'],
+          ['unreviewed', 'Réinitialiser']
+        ]) {
+          const b = document.createElement('button');
+          b.className = 'secondary';
+          b.textContent = label;
+          b.disabled = a.review_status === st;
+          b.onclick = () => review(a, st);
+          row.append(b);
+        }
+      }
+
+      root.append(el);
+    }
+
+    show('more', items.length > shown);
+  }
+
+  async function review(a, status) {
+    const { error } = await db
+      .from('articles')
+      .update({
+        review_status: status,
+        reviewed_at: status === 'unreviewed'
+          ? null
+          : new Date().toISOString(),
+        reviewed_by: status === 'unreviewed'
+          ? null
+          : currentUser.id
+      })
+      .eq('id', a.id);
+
+    if (error) {
+      notice(
+        'Validation impossible : ' + error.message,
+        true
+      );
+      return;
+    }
+
+    a.review_status = status;
+    render();
+  }
+
+  for (const id of [
+    'search',
+    'orchestra',
+    'category',
+    'status'
+  ]) {
+    $(id).addEventListener(
+      id === 'search' ? 'input' : 'change',
+      () => {
+        shown = pageSize;
+        render();
+      }
+    );
+  }
+
+  $('more').onclick = () => {
+    shown += pageSize;
+    render();
+  };
+
+  $('export').onclick = () => {
+    const cols = [
+      'published_at',
+      'orchestra',
+      'category',
+      'title',
+      'source',
+      'url',
+      'review_status'
+    ];
+
+    const csv = [
+      cols.join(','),
+      ...filtered().map(a =>
+        cols.map(k =>
+          '"' +
+          String(a[k] ?? '').replaceAll('"', '""') +
+          '"'
+        ).join(',')
+      )
+    ].join('\r\n');
+
+    const blob = new Blob(
+      ['\uFEFF' + csv],
+      { type: 'text/csv;charset=utf-8' }
+    );
+
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+
+    link.href = url;
+    link.download = 'observatoire-sudonpl.csv';
+    link.click();
+
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+
+  // Service worker temporarily disabled during debugging.
+  boot();
+})();
