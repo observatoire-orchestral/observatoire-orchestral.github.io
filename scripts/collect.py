@@ -54,8 +54,16 @@ def fetch(name,query):
   if e.get('published_parsed'):
    pub=datetime.fromtimestamp(time.mktime(e.published_parsed),timezone.utc).isoformat()
   source=e.get('source',{}).get('title','Google Actualités')
-  yield {'url':link,'title':title,'summary':summary,'source_name':clean(source)[:200], 'orchestra':name,'topic':topic(title+' '+summary),'published_at':pub,'is_auto':True,'review_status':'pending'}
-def main():
+  yield {
+    'url': link,
+    'title': title,
+    'summary': summary,
+    'source': clean(source)[:200],
+    'orchestra': name,
+    'category': topic(title + ' ' + summary),
+    'published_at': pub,
+    'review_status': 'unreviewed'
+}
  count=0;errors=[]
  for name,q in ORCHESTRAS.items():
   try:
