@@ -33,7 +33,7 @@ ORCHESTRAS = {
     'Orchestre de Paris': '"Orchestre de Paris"',
     'Orchestre national de Lyon': '"Orchestre national de Lyon"',
     'Orchestre national de Lille': '"Orchestre national de Lille"',
-    'Orchestre national de Bordeaux Aquitaine': '"Orchestre national Bordeaux Aquitaine"',
+    'Orchestre national de Bordeaux Aquitaine': '("Opéra de Bordeaux" OR "Opéra National de Bordeaux" OR "Orchestre National Bordeaux Aquitaine" OR "ONBA")',
     'Orchestre national du Capitole de Toulouse': '"Orchestre national du Capitole"',
     'Orchestre philharmonique de Strasbourg': '"Orchestre philharmonique de Strasbourg"',
     'Orchestre national de Metz': '"Orchestre national de Metz"',
