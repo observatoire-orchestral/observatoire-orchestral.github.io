@@ -1,1 +1,18 @@
-{"name":"Observatoire des orchestres — SUDCT 44","short_name":"Observatoire SUD","description":"Veille syndicale des orchestres français","start_url":"./","scope":"./","display":"standalone","background_color":"#f2f5f4","theme_color":"#173a47","icons":[{"src":"assets/icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any maskable"}]}
+{
+  "name": "Observatoire Orchestral",
+  "short_name": "Observatoire",
+  "description": "Veille sociale, économique et institutionnelle des orchestres français",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f8f7f3",
+  "theme_color": "#21354a",
+  "icons": [
+    {
+      "src": "assets/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
