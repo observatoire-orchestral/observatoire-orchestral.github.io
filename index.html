@@ -1,10 +1,39 @@
 <!doctype html>
-<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="theme-color" content="#123a43"><meta name="description" content="Veille syndicale des orchestres professionnels français"><link rel="manifest" href="./manifest.webmanifest"><link rel="icon" href="./assets/icon.svg" type="image/svg+xml"><title>Observatoire SUD ONPL</title><link rel="stylesheet" href="./style.css"></head>
-<body><header><div class="brand"><img src="./assets/icon.svg" alt="" width="44" height="44"><div><strong>Observatoire Orchestral</strong><small>Veille des orchestres professionnels français</small></div></div><div id="account"></div></header>
-<main><div id="notice" role="status" aria-live="polite"></div>
-<section id="setup" class="panel hidden"><h2>Configuration nécessaire</h2><p>Renseignez l’URL Supabase et la clé publique dans <code>config.js</code>, puis publiez à nouveau.</p></section>
-<section id="auth" class="panel hidden"><h1>Accès réservé aux membres</h1><p>Connectez-vous avec votre adresse e-mail. Les nouveaux comptes nécessitent l’approbation d’un administrateur.</p><form id="loginForm"><label>E-mail<input id="email" type="email" required autocomplete="email"></label><label>Mot de passe<input id="password" type="password" required minlength="6" autocomplete="current-password"></label><div class="actions"><button type="submit">Se connecter</button><button type="button" id="signup" class="secondary">Créer un compte</button><button type="button" id="reset" class="ghost">Mot de passe oublié</button></div></form></section>
-<section id="pending" class="panel hidden"><h1>Compte en attente</h1><p>Votre compte existe, mais un administrateur doit l’autoriser. Vous ne pouvez pas encore consulter les actualités.</p><button id="refresh">Vérifier mon accès</button></section>
-<section id="dashboard" class="hidden"><div class="hero"><div><h1>Actualités des orchestres</h1><p>Collecte automatique · articles non examinés affichés par défaut · vérification humaine facultative</p></div><button id="reload" class="secondary">Actualiser</button></div><div class="stats"><div class="stat"><strong id="total">0</strong><span>Articles</span></div><div class="stat"><strong id="unreviewed">0</strong><span>Non examinés</span></div><div class="stat"><strong id="orchCount">0</strong><span>Orchestres cités</span></div></div><div class="filters"><label>Rechercher<input id="search" placeholder="Mots-clés, titre, source…"></label><label>Orchestre<select id="orchestra"><option value="">Tous</option></select></label><label>Thème<select id="category"><option value="">Tous</option></select></label><label>Validation<select id="status"><option value="">Tous</option><option value="unreviewed">Non examinés</option><option value="validated">Validés</option><option value="rejected">Rejetés</option></select></label></div><div class="toolbar"><span id="count"></span><button class="ghost" id="export">Exporter CSV</button></div><div id="articles" class="cards"></div><button id="more" class="secondary hidden">Charger davantage</button></section>
-<footer>Observatoire Orchestral · Les informations proviennent de sources publiques. La présence d’un article ne vaut pas confirmation de ses affirmations. <span id="last"></span></footer></main>
-<script src="./config.js"></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script><script type="module" src="./assets/app.js"></script></body></html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#21354a">
+  <meta name="description" content="Observatoire Orchestral — veille sociale, économique et institutionnelle des orchestres professionnels français.">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="icon" href="./assets/icon.svg" type="image/svg+xml">
+  <title>Observatoire Orchestral — Veille des orchestres français</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <div class="topline"><div class="shell"><span>VEILLE • ANALYSE • DOCUMENTATION</span><span class="topline-right">LES ORCHESTRES PROFESSIONNELS FRANÇAIS</span></div></div>
+  <header class="site-header"><div class="shell header-inner">
+    <div class="brand"><img src="./assets/icon.svg" alt="" width="46" height="46"><div><strong>Observatoire <em>Orchestral</em></strong><small>Veille sociale, économique et institutionnelle</small></div></div>
+    <div id="account"></div>
+  </div></header>
+  <main class="shell">
+    <div id="notice" role="status" aria-live="polite"></div>
+    <section id="setup" class="panel hidden"><p class="eyebrow">Configuration</p><h2>Configuration nécessaire</h2><p>Renseignez l’URL Supabase et la clé publique dans <code>config.js</code>, puis publiez à nouveau.</p></section>
+    <section id="auth" class="panel auth-panel hidden"><p class="eyebrow">Espace membres</p><h1>Accès réservé aux membres</h1><p>Connectez-vous pour consulter la veille des orchestres français.</p><form id="loginForm"><label>E-mail<input id="email" type="email" required autocomplete="email" placeholder="vous@exemple.fr"></label><label>Mot de passe<input id="password" type="password" required minlength="6" autocomplete="current-password" placeholder="Votre mot de passe"></label><div class="actions"><button type="submit">Se connecter</button><button type="button" id="signup" class="secondary">Créer un compte</button><button type="button" id="reset" class="ghost">Mot de passe oublié</button></div></form></section>
+    <section id="pending" class="panel hidden"><p class="eyebrow">Votre compte</p><h1>Compte en attente</h1><p>Votre accès n'est pas encore disponible. Vérifiez son statut ci-dessous.</p><button id="refresh">Vérifier mon accès</button></section>
+    <section id="dashboard" class="hidden">
+      <div class="hero"><div class="hero-copy"><p class="eyebrow">OBSERVATOIRE • FRANCE</p><h1>Comprendre la vie<br>des <em>orchestres français.</em></h1><p>Actualités, décisions publiques et documentation sur les enjeux sociaux, économiques et institutionnels du secteur orchestral.</p></div><button id="reload" class="secondary">↻ Actualiser</button></div>
+      <div class="section-heading"><div><p class="eyebrow">EN UN REGARD</p><h2>La veille en chiffres</h2></div><span class="section-note">Base documentaire</span></div>
+      <div class="stats"><div class="stat"><span>PUBLICATIONS</span><strong id="total">0</strong><small>Articles recensés</small></div><div class="stat"><span>À EXAMINER</span><strong id="unreviewed">0</strong><small>Vérification facultative</small></div><div class="stat"><span>INSTITUTIONS</span><strong id="orchCount">0</strong><small>Orchestres référencés</small></div></div>
+      <div class="section-heading articles-heading"><div><p class="eyebrow">CONSULTER LES SOURCES</p><h2>Publications &amp; archives</h2></div></div>
+      <div class="filters"><label>Rechercher<input id="search" type="search" placeholder="Titre, mot-clé, source…"></label><label>Orchestre<select id="orchestra"><option value="">Tous</option></select></label><label>Thème<select id="category"><option value="">Tous</option></select></label><label>Validation<select id="status"><option value="">Tous</option><option value="unreviewed">Non examinés</option><option value="validated">Validés</option><option value="rejected">Rejetés</option></select></label></div>
+      <div class="toolbar"><span id="count" aria-live="polite"></span><button class="ghost" id="export">↓ Exporter CSV</button></div>
+      <div id="articles" class="cards"></div><button id="more" class="secondary hidden">Charger davantage</button>
+    </section>
+    <footer><div><strong>Observatoire Orchestral</strong><p>Veille sociale, économique et institutionnelle des orchestres français.</p></div><p>Les informations proviennent de sources publiques. La présence d’un article ne vaut pas confirmation de ses affirmations. <span id="last"></span></p></footer>
+  </main>
+  <script src="./config.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <script type="module" src="./assets/app.js"></script>
+</body>
+</html>
