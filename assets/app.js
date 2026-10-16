@@ -1,5 +1,5 @@
 
-/* Observatoire SUD ONPL */
+/* Observatoire Orchestral */
 (() => {
   'use strict';
 
