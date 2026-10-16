@@ -479,7 +479,7 @@
     const link = document.createElement('a');
 
     link.href = url;
-    link.download = 'observatoire-sudonpl.csv';
+    link.download = 'observatoire-orchestral.csv';
     link.click();
 
     setTimeout(() => URL.revokeObjectURL(url), 1000);
