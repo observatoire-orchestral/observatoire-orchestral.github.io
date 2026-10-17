@@ -133,7 +133,7 @@ def extra_feeds():
 
 
 
-STATS = {'submitted': 0, 'excluded': 0, 'inserted': 0, 'duplicates_or_ignored': 0}
+STATS = {'submitted': 0, 'excluded': 0, 'inserted': 0, 'duplicates_or_ignored': 0, 'exclusion_reasons': {}}
 
 def store(article):
     """Classify once, insert only new URLs, preserve all existing records.
@@ -141,9 +141,14 @@ def store(article):
     A later phase can update existing articles after human-approved rules.
     No read-before-write is required: the unique URL constraint handles duplicates.
     """
-    from classification import prepare, clearly_irrelevant
-    if clearly_irrelevant(article.get("title", ""), article.get("summary", ""), article.get("source", ""), article.get("url", "")):
+    from classification import prepare
+    from relevance import assess
+    decision = assess(article.get('title',''), article.get('summary',''),
+                      article.get('source',''), article.get('url',''), article.get('orchestra',''))
+    if not decision.accept:
         STATS['excluded'] += 1
+        reasons = STATS['exclusion_reasons']
+        reasons[decision.reason] = reasons.get(decision.reason, 0) + 1
         return False
     item = prepare(article)
     response = SESSION.post(
@@ -217,6 +222,7 @@ def main():
         print(f'DOCUMENTARY WARNING: {exc}', file=sys.stderr)
 
     print(f"BILAN PHASE 4: candidates={proposed}, submitted={STATS['submitted']}, inserted={STATS['inserted']}, excluded={STATS['excluded']}, duplicates_or_ignored={STATS['duplicates_or_ignored']}, errors={len(errors)}")
+    print('EXCLUSION REASONS:', json.dumps(STATS['exclusion_reasons'], ensure_ascii=False, sort_keys=True))
     if errors:
         sys.exit(1)
 

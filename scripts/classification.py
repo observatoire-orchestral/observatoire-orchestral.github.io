@@ -39,15 +39,15 @@ KEYWORDS = {
  'Budget et subventions': ('budget','subvention','subventions','deficit','financement','dotation','coupe budgetaire','baisse de financement','aide publique','desengagement financier','fonds de roulement'),
  'Conditions de travail': ('conditions de travail','temps de travail','remuneration','salaire','salaires','convention collective','risques psychosociaux','souffrance au travail','harcelement','heures supplementaires','charge de travail','sante au travail','repos hebdomadaire'),
  'Emploi et recrutement': ('recrutement','licenciement','suppression de poste','suppression de postes','gel des recrutements','offre d emploi','concours de recrutement','auditions et concours','postes vacants','non remplacement','non renouvellement'),
- 'Gouvernance': ('gouvernance','directeur general','nomination','demission','restructuration','reorganisation','conseil d administration','audit','direction generale','chambre regionale des comptes','nouvelle directrice','nouveau directeur','directeur musical','directrice musicale','renouvellement de mandat','nomme a la tete','nommee a la tete'),
+ 'Gouvernance': ('gouvernance','directeur general','nomination','demission','restructuration','reorganisation','conseil d administration','audit','direction generale','chambre regionale des comptes','nouvelle directrice','nouveau directeur','directeur musical','directrice musicale','renouvellement de mandat','nomme a la tete','nommee a la tete','prolonge a la direction','prolonge a la tete','prolonge a la direction musicale','quitte l orchestre','fait ses adieux a l orchestre','renouvele a la direction','renouvelee a la direction'),
  'Mobilisation et grève': ('greve','preavis de greve','mobilisation','manifestation','syndicat','syndical','petition','mouvement social','debrayage'),
 }
 
 REVIEW = ('critique', 'compte rendu', 'recension', 'concert review', 'opera review', 'chronique musicale', 'notre critique')
 NOT_REVIEW = ('billetterie', 'agenda', 'calendrier', 'programme de saison', 'abonnement', 'event listing', 'listing and tickets', 'tickets', 'reservation de billets', 'archives des', 'parcours de visite', 'maquette', 'programme complet')
 REVIEW_SITES = ('bachtrack.com','resmusica.com','forumopera.com','concertclassic.com','classykeo.com','olyrix.com')
-GOVERNANCE_TITLES = ('nouvelle directrice', 'nouveau directeur', 'nomme directeur', 'nommee directrice', 'renouvele a la tete', 'reconduit a la tete', 'prend la direction', 'direction de l orchestre', 'directeur musical nomme', 'directrice musicale nommee')
-BUDGET_TITLES = ('trop chers', 'trop cher', 'coutent trop', 'financement en baisse')
+GOVERNANCE_TITLES = ('nouvelle directrice', 'nouveau directeur', 'nomme directeur', 'nommee directrice', 'renouvele a la tete', 'reconduit a la tete', 'prend la direction', 'direction de l orchestre', 'directeur musical nomme', 'directrice musicale nommee','fait ses adieux a l orchestre','quitte l orchestre','prolonge a la direction','prolonge a la tete','prolonge a la direction musicale','renouvele a la direction','renouvelee a la direction')
+BUDGET_TITLES = ('trop chers', 'trop cher', 'coutent trop', 'financement en baisse','budgetaire','coupes budgetaires','deficit de l orchestre')
 # Narrow, title-based exclusion only. We avoid discarding uncertain articles.
 IRRELEVANT_TITLES = ('listing and tickets', 'ouverture de la billetterie', 'reservation de billets', 'archives des', 'parcours de visite', 'programme complet', 'acheter vos billets', 'billets disponibles', 'calendrier des concerts')
 
@@ -72,17 +72,22 @@ def clearly_irrelevant(title, summary='', source='', url=''):
 
 def classify(title,summary='',suggested='Autres',source='',url=''):
  heading,body=fold(title),fold(summary)
- scores={k:3*sum(has(heading,w) for w in words)+sum(has(body,w) for w in words) for k,words in KEYWORDS.items()}
- if any(has(heading,x) for x in GOVERNANCE_TITLES): scores['Gouvernance']+=6
- if any(has(heading,x) for x in BUDGET_TITLES) and ('orchestre' in heading or 'musicien' in heading): scores['Budget et subventions']+=6
- # Subject-matter reporting outranks source reputation or review wording.
+ # Title is stronger than snippets, which can contain unrelated page boilerplate.
+ scores={k:4*sum(has(heading,w) for w in words)+sum(has(body,w) for w in words) for k,words in KEYWORDS.items()}
+ if any(has(heading,x) for x in GOVERNANCE_TITLES): scores['Gouvernance']+=8
+ if any(has(heading,x) for x in BUDGET_TITLES) and ('orchestre' in heading or 'musicien' in heading): scores['Budget et subventions']+=8
+ # Contextual leadership changes; do not classify a generic departure as governance.
+ if any(has(heading,x) for x in ('fait ses adieux','quitte','prolonge','renouvele','reconduit')) and any(has(heading,x) for x in ('orchestre','direction musicale','directeur musical','directrice musicale')):
+  scores['Gouvernance']+=7
  best=max(scores,key=scores.get)
- if scores[best]: return best
+ if scores[best]>=3: return best
  excluded=any(has(heading,x) for x in NOT_REVIEW)
  if not excluded and any(has(heading,x) for x in REVIEW): return 'Critique musicale'
- # Source alone does not prove the article is a performance review.
- # Preserve an explicit upstream review designation only if not an obvious listing.
- if suggested=='Critique musicale' and not excluded and any(has(heading,x) for x in ('compte rendu','critique','recital','concert','opera','symphonie','representation')): return suggested
+ # Reviews have characteristic evaluative language, but must also refer to a performance.
+ performance=any(has(heading,x) for x in ('orchestre','symphonie','concert','opera','mahler','beethoven','mozart','brahms','sacre','creation','philharmonie'))
+ evaluation=any(has(heading,x) for x in ('sacre','mahlerien','triomphe','eblouissant','sans surprise','promesses tenues','conquiert','conquierent','demonumentalisee','acclamations','huees','incandescente','magnifique','magistral','decevant'))
+ if not excluded and performance and evaluation and is_review_source(source,url): return 'Critique musicale'
+ if suggested=='Critique musicale' and not excluded and performance and is_review_source(source,url): return 'Critique musicale'
  if suggested in CATEGORIES and suggested!='Critique musicale': return suggested
  return 'Autres'
 def organisations(title,summary=''):
