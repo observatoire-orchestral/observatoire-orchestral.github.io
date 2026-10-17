@@ -81,6 +81,9 @@ def prepare(article):
         item['orchestra'] = SECTOR
     else:
         item['orchestra'] = SECTOR
+    # Additional names are candidate associations based on explicit title/summary mentions.
+    # The original orchestra field remains for backwards compatibility.
+    item['organizations'] = names or ([item['orchestra']] if item['orchestra'] != SECTOR else [])
     item['is_auto'] = True
     item['review_status'] = 'unreviewed'
     item.pop('reviewed_by', None)
