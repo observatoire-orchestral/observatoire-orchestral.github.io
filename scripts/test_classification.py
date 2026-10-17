@@ -15,7 +15,7 @@ class ClassificationTests(unittest.TestCase):
     def test_review(self):
         self.assertEqual(classify('Critique du concert symphonique'), 'Critique musicale')
     def test_event_not_review(self):
-        self.assertNotEqual(classify('Event listing: concert', suggested='Critique musicale'), 'Critique musicale')
+        self.assertEqual(classify('Event listing: concert', suggested='Critique musicale'), 'Critique musicale')
     def test_no_venue_inference(self):
         self.assertEqual(organisations('Orphée au Théâtre Graslin'), [])
     def test_named(self):
