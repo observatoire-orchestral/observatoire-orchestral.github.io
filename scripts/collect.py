@@ -235,7 +235,7 @@ def store(article):
         URL + '/rest/v1/articles',
         params={'select': 'url,orchestra,category,review_status',
                 'url': 'eq.' + url, 'limit': '1'},
-        headers={'Accept': 'application/json'}, timeout=25,
+        headers={**HEADERS, 'Accept': 'application/json'}, timeout=25,
     )
     lookup.raise_for_status()
     rows = lookup.json()
@@ -272,8 +272,7 @@ def store(article):
             URL + '/rest/v1/articles',
             params={'url': 'eq.' + url, 'review_status': 'eq.unreviewed'},
             json=changes,
-            headers={'Content-Type': 'application/json',
-                     'Prefer': 'return=minimal'},
+            headers={**HEADERS, 'Prefer': 'return=minimal'},
             timeout=25,
         )
         if not response.ok:
