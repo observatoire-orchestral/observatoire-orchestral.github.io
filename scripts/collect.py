@@ -121,9 +121,13 @@ def normalize(entry, orchestra, fallback_source):
         'orchestra': orchestra,
         'category': (
             'Critique musicale'
-            if 'bachtrack.com' in urlparse(link).netloc.lower()
+            if (
+                'bachtrack.com' in urlparse(link).netloc.lower()
+                or 'bachtrack' in source.casefold()
+            )
             else category(title + ' ' + summary)
         ),
+
 
         'published_at': published(entry),
         'is_auto': True,
