@@ -92,6 +92,18 @@ class PageParser(HTMLParser):
             self.anchor_text = []
 
 
+def identify_orchestra(text, default):
+    text = norm(text)
+
+    if (
+        re.search(r'\bonpl\b', text)
+        or 'orchestre national des pays de la loire' in text
+        or 'orchestre national des pays-de-la-loire' in text
+    ):
+        return 'ONPL'
+
+    return default
+
 def topic(text):
     text = norm(text)
     for label, words in TOPICS:
