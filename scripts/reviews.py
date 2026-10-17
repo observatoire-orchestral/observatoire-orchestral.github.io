@@ -16,6 +16,7 @@ import requests
 
 ALIASES = {
     'ONPL': ('Orchestre National des Pays de la Loire', 'ONPL', 'Orchestre des Pays de la Loire'),
+    'Angers Nantes Opéra': ('Angers Nantes Opéra','Angers Nantes Opera','Angers-Nantes Opéra','Angers-Nantes Opera',),
     'Orchestre de Paris': ('Orchestre de Paris',),
     'Orchestre national de Lyon': ('Orchestre national de Lyon',),
     'Orchestre national de Lille': ('Orchestre national de Lille',),
