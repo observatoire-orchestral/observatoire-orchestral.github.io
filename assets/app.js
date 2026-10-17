@@ -119,6 +119,11 @@
 
     
 
+    if (!profile.approved) {
+      show('pending', true);
+      return;
+    }
+
     isAdmin = profile.role === 'admin';
 
     show('dashboard', true);
@@ -230,7 +235,7 @@
       const { data, error } = await db
         .from('articles')
         .select(
-          'id,title,url,source,published_at,found_at,orchestra,organizations,category,summary,review_status,is_auto,reviewed_by'
+          'id,title,url,source,published_at,found_at,orchestra,category,summary,review_status'
         )
         .order('published_at', {
           ascending: false,
@@ -258,6 +263,7 @@
     }
 
     records = all;
+    $('last').textContent = records.length ? 'Dernière collecte visible : ' + new Date(Math.max(...records.map(a => Date.parse(a.found_at) || 0))).toLocaleDateString('fr-FR') : ''; 
     populate();
     shown = pageSize;
     render();
@@ -268,7 +274,7 @@
       [
         'orchestra',
         [...new Set(
-          records.flatMap(x => (x.organizations?.length ? x.organizations : [x.orchestra])).filter(Boolean)
+          records.map(x => x.orchestra).filter(Boolean)
         )]
       ],
       [
@@ -303,7 +309,7 @@
     return records.filter(a =>
       (
         !q ||
-        [a.title, a.summary, a.source, a.orchestra, ...(a.organizations || [])]
+        [a.title, a.summary, a.source, a.orchestra]
           .some(x =>
             String(x || '')
               .toLocaleLowerCase('fr')
@@ -312,7 +318,7 @@
       ) &&
       (
         !$('orchestra').value ||
-        (a.organizations?.includes($('orchestra').value) || (!a.organizations?.length && a.orchestra === $('orchestra').value))
+        a.orchestra === $('orchestra').value
       ) &&
       (
         !$('category').value ||
@@ -328,20 +334,20 @@
   function render() {
     const items = filtered();
 
-    $('total').textContent = records.length;
+    $('total').textContent = records.length.toLocaleString('fr-FR');
 
     $('unreviewed').textContent = records.filter(
       x => x.review_status === 'unreviewed'
-    ).length;
+    ).length.toLocaleString('fr-FR');
 
     $('orchCount').textContent = new Set(
       records
-        .flatMap(x => (x.organizations?.length ? x.organizations : [x.orchestra]))
+        .map(x => x.orchestra)
         .filter(x => x && x !== 'Autres orchestres')
     ).size;
 
     $('count').textContent =
-      `${items.length} résultat(s)`;
+      `${items.length.toLocaleString('fr-FR')} résultat(s)`;
 
     const root = $('articles');
     root.replaceChildren();
@@ -366,7 +372,7 @@
           </a>
         </h2>
         <span class="pill">
-          ${esc(a.organizations?.length ? a.organizations.join(' · ') : (a.orchestra || 'Autres orchestres'))}
+          ${esc(a.orchestra || 'Autres orchestres')}
         </span>
         <span class="pill">
           ${esc(a.category || 'Général')}
@@ -378,7 +384,6 @@
               statusText[a.review_status] || a.review_status
             )}
           </span>
-          <span class="status"> · ${a.reviewed_by ? 'Révision humaine enregistrée' : (a.is_auto ? 'Collecte automatique · validation humaine non attestée' : 'Origine manuelle')}</span>
         </div>
       `;
 
@@ -446,6 +451,16 @@
     );
   }
 
+  document.querySelectorAll('[data-quick-category]').forEach(b => {
+    b.addEventListener('click', () => {
+      $('category').value = b.dataset.quickCategory;
+      $('search').value = '';
+      shown = pageSize;
+      render();
+      document.querySelector('.articles-heading')?.scrollIntoView({behavior:'smooth'});
+    });
+  });
+
   $('more').onclick = () => {
     shown += pageSize;
     render();
@@ -455,7 +470,6 @@
     const cols = [
       'published_at',
       'orchestra',
-      'organizations',
       'category',
       'title',
       'source',
@@ -468,7 +482,7 @@
       ...filtered().map(a =>
         cols.map(k =>
           '"' +
-          String(Array.isArray(a[k]) ? a[k].join(' | ') : (a[k] ?? '')).replaceAll('"', '""') +
+          String(a[k] ?? '').replaceAll('"', '""') +
           '"'
         ).join(',')
       )
