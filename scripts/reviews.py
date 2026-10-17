@@ -35,6 +35,11 @@ PERFORMANCE_SIGNALS = ('concert', 'symphonie', 'concerto', 'opera', 'representat
                        'recital', 'festival', 'interpretation', 'production',
                        'direction', 'brahms', 'beethoven', 'mozart', 'mahler',
                        'debussy', 'ravel', 'verdi', 'wagner', 'puccini', 'massenet')
+# Print a small sample of rejected ONPL results for troubleshooting.
+# Set to 0 after diagnosis to disable these extra log lines.
+DEBUG_ORCHESTRA = 'ONPL'
+DEBUG_SAMPLE_LIMIT = 6
+
 EXCLUDE = ('billetterie', 'appel a candidature', 'recrutement', 'offre d emploi',
            'programme de saison', 'annonce de saison', 'abonnement saison')
 
@@ -96,6 +101,7 @@ def run(store, google_news):
     for orchestra, names in ALIASES.items():
         stats = {'fetched': 0, 'duplicate': 0, 'no_name': 0,
                  'not_review': 0, 'submitted': 0, 'errors': 0}
+        debug_samples = {'no_orchestra_match': [], 'not_review': []}
         for query in dict.fromkeys(search_queries(names)):
             try:
                 for article in google_news(query, orchestra):
@@ -110,9 +116,13 @@ def run(store, google_news):
                         continue
                     if not orchestra_matches(article, names):
                         stats['no_name'] += 1
+                        if orchestra == DEBUG_ORCHESTRA and len(debug_samples['no_orchestra_match']) < DEBUG_SAMPLE_LIMIT:
+                            debug_samples['no_orchestra_match'].append((query, article.get('title', ''), article.get('source', '')))
                         continue
                     if not is_review(article):
                         stats['not_review'] += 1
+                        if orchestra == DEBUG_ORCHESTRA and len(debug_samples['not_review']) < DEBUG_SAMPLE_LIMIT:
+                            debug_samples['not_review'].append((query, article.get('title', ''), article.get('source', '')))
                         continue
                     article['orchestra'] = orchestra
                     article['category'] = 'Critique musicale'
@@ -129,6 +139,15 @@ def run(store, google_news):
               f'no_orchestra_match={stats["no_name"]}, '
               f'not_review={stats["not_review"]}, '
               f'submitted={stats["submitted"]}, errors={stats["errors"]}', flush=True)
+        if orchestra == DEBUG_ORCHESTRA:
+            for reason, examples in debug_samples.items():
+                for i, (query, title, source) in enumerate(examples, 1):
+                    # Keep logs short and readable; only public article metadata.
+                    safe_title = ' '.join(str(title).split())[:180]
+                    safe_source = ' '.join(str(source).split())[:60]
+                    print(f'REVIEW DEBUG {orchestra} {reason} #{i}: '
+                          f'{safe_title!r} | source={safe_source!r} | query={query[:100]!r}',
+                          flush=True)
     print(f'Review discovery: {total_submitted} candidates submitted '
           '(existing database URLs may be ignored by store)', flush=True)
     return total_submitted
