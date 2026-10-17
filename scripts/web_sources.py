@@ -212,7 +212,11 @@ def discover(session, source):
             'title': page_title[:400],
             'summary': summary,
             'source': source['source'][:200],
-            'orchestra': source.get('orchestra') or SECTOR,
+            'orchestra': identify_orchestra(
+    page_title + ' ' + context[:1200],
+    source.get('orchestra') or SECTOR
+),
+
             'category': topic(page_title + ' ' + context[:1000]),
             'published_at': None,
             'is_auto': True,
