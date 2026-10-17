@@ -1,0 +1,29 @@
+name: Phase 6.2 - Appliquer les catégories proposées
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "preview = vérifier ; apply = changer les catégories non validées"
+        required: true
+        type: choice
+        options: [preview, apply]
+        default: preview
+permissions:
+  contents: read
+jobs:
+  categories:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r requirements.txt
+      - name: Vérifier ou appliquer les catégories
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          MODE: ${{ inputs.mode }}
+        run: |
+          if [ "$MODE" = apply ]; then python scripts/phase62_apply_categories.py --apply; else python scripts/phase62_apply_categories.py; fi
