@@ -1,13 +1,19 @@
-"""Discover public concert and opera reviews of French professional orchestras.
+"""Public concert/opera review discovery for Observatoire Orchestral.
 
-Uses collect.py's existing google_news(query, orchestra) and store(article).
-No direct publisher scraping, paywall access, or paid API.
+Compatible with collect.py: run(store, google_news). Attempts to inspect public
+publisher article HTML after safe redirects; does not bypass access controls,
+paywalls, robots restrictions, or require additional Python dependencies.
 """
+import html
 import re
 import time
 import unicodedata
+from html.parser import HTMLParser
+from urllib.parse import urlparse
+from urllib.robotparser import RobotFileParser
 
-# Canonical names must match collect.py / the website's orchestra filter.
+import requests
+
 ALIASES = {
     'ONPL': ('Orchestre National des Pays de la Loire', 'ONPL', 'Orchestre des Pays de la Loire'),
     'Orchestre de Paris': ('Orchestre de Paris',),
@@ -26,28 +32,19 @@ ALIASES = {
     'Orchestre national de Cannes': ('Orchestre national de Cannes',),
 }
 
-REVIEW_DOMAINS = ('classiquenews.com', 'classykeo.com', 'resmusica.com',
-                  'bachtrack.com', 'forumopera.com', 'concertclassic.com')
-REVIEW_SIGNALS = ('critique', 'compte rendu', 'review', 'recension', 'chronique',
-                  'nous avons assiste', 'on a assiste', 'a l affiche',
-                  'concert review', 'opera review')
-PERFORMANCE_SIGNALS = ('concert', 'symphonie', 'concerto', 'opera', 'representation',
-                       'recital', 'festival', 'interpretation', 'production',
-                       'direction', 'brahms', 'beethoven', 'mozart', 'mahler',
-                       'debussy', 'ravel', 'verdi', 'wagner', 'puccini', 'massenet')
-# Print a small sample of rejected ONPL results for troubleshooting.
-# Set to 0 after diagnosis to disable these extra log lines.
-DEBUG_ORCHESTRA = 'ONPL'
-DEBUG_SAMPLE_LIMIT = 6
-
-# Possible reviews require an explicitly named orchestra, a specialist publisher,
-# and a performance clue. They remain unpublished until an admin reviews them.
-POSSIBLE_REVIEW_SOURCES = ('classiquenews', 'classykeo', 'resmusica',
-                           'bachtrack', 'forumopera', 'forum opera',
-                           'concertclassic')
-
-EXCLUDE = ('billetterie', 'appel a candidature', 'recrutement', 'offre d emploi',
+SOURCES = ('classiquenews', 'classykeo', 'resmusica', 'bachtrack',
+           'forumopera', 'concertclassic')
+REVIEW_TERMS = ('critique', 'compte rendu', 'recension', 'review',
+                'concert review', 'opera review')
+PERFORMANCE_TERMS = ('concert', 'opera', 'symphonie', 'concerto', 'representation',
+                     'interpretation', 'production', 'direction', 'recital')
+EXCLUDE = ('billetterie', 'appel a candidature', 'recrutement',
            'programme de saison', 'annonce de saison', 'abonnement saison')
+UA = 'ObservatoireOrchestral/1.0 (public review monitoring)'
+MAX_BYTES = 650_000
+MAX_FETCHES_PER_ORCHESTRA = 12
+DEBUG_ORCHESTRA = 'ONPL'
+DEBUG_LIMIT = 5
 
 
 def fold(value):
@@ -56,130 +53,216 @@ def fold(value):
     return re.sub(r'[^a-z0-9]+', ' ', value).strip()
 
 
-def has_phrase(normalized_text, phrase):
+def has(text, phrase):
     target = fold(phrase)
-    return bool(target and re.search(r'(?<!\w)' + re.escape(target) + r'(?!\w)', normalized_text))
+    return bool(target and re.search(r'(?<!\w)' + re.escape(target) + r'(?!\w)', text))
 
 
-def article_text(article):
-    return fold((article.get('title') or '') + ' ' + (article.get('summary') or ''))
+def named(text, aliases):
+    return any(has(text, alias) for alias in aliases)
 
 
-def orchestra_matches(article, names):
-    text = article_text(article)
-    return any(has_phrase(text, alias) for alias in names)
+def specialist(article):
+    return any(word in fold(article.get('source')) for word in SOURCES)
 
 
-def is_review(article):
-    title = fold(article.get('title'))
-    text = article_text(article)
-    if any(has_phrase(title, word) for word in EXCLUDE):
+def looks_review(title, summary, body):
+    t = fold(title)
+    combined = fold(title + ' ' + summary + ' ' + body[:12000])
+    if any(has(t, word) for word in EXCLUDE):
         return False
-    # A clear review marker in the title is sufficient: titles often omit
-    # generic words such as 'concert' even for actual performance reviews.
-    if any(has_phrase(title, word) for word in REVIEW_SIGNALS):
+    if any(has(t, word) for word in REVIEW_TERMS):
         return True
-    # Otherwise require both review language and performance context.
-    return (any(has_phrase(text, word) for word in REVIEW_SIGNALS)
-            and any(has_phrase(text, word) for word in PERFORMANCE_SIGNALS))
+    # A review marker in the full body is useful only with performance context.
+    return (any(has(combined, word) for word in REVIEW_TERMS)
+            and any(has(combined, word) for word in PERFORMANCE_TERMS))
 
 
+class ArticleParser(HTMLParser):
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.depth = 0
+        self.ignored = 0
+        self.in_article = 0
+        self.in_main = 0
+        self.article_text = []
+        self.main_text = []
+        self.paragraphs = []
+        self.in_p = 0
+        self.meta = []
 
-def is_possible_review(article):
-    """A specialist performance article needing human review, not publication."""
-    title = fold(article.get('title'))
-    text = article_text(article)
-    source = fold(article.get('source'))
-    if any(has_phrase(title, word) for word in EXCLUDE):
-        return False
-    if not any(has_phrase(source, name) for name in POSSIBLE_REVIEW_SOURCES):
-        return False
-    # Avoid treating orchestra season previews and calendar listings as reviews.
-    if any(has_phrase(title, term) for term in (
-        'saison 2026 2027', 'saison 2025 2026', 'saison 2027 2028',
-        'agenda', 'calendrier', 'programme', 'a venir', 'prochain concert',
-        'ven 25', 'sam 26', 'dim 27', 'reservation', 'dates des concerts',
-    )):
-        return False
-    return any(has_phrase(text, word) for word in PERFORMANCE_SIGNALS)
+    def handle_starttag(self, tag, attrs):
+        attrs = dict(attrs)
+        if tag in ('script', 'style', 'noscript', 'nav', 'footer', 'header'):
+            self.ignored += 1
+        if tag == 'article':
+            self.in_article += 1
+        if tag == 'main':
+            self.in_main += 1
+        if tag == 'p':
+            self.in_p += 1
+        if tag == 'meta' and (attrs.get('property') or attrs.get('name') or '').lower() in ('og:description', 'description'):
+            self.meta.append(attrs.get('content', ''))
+
+    def handle_endtag(self, tag):
+        if tag in ('script', 'style', 'noscript', 'nav', 'footer', 'header') and self.ignored:
+            self.ignored -= 1
+        if tag == 'article' and self.in_article:
+            self.in_article -= 1
+        if tag == 'main' and self.in_main:
+            self.in_main -= 1
+        if tag == 'p' and self.in_p:
+            self.in_p -= 1
+
+    def handle_data(self, data):
+        if self.ignored:
+            return
+        if self.in_article:
+            self.article_text.append(data)
+        if self.in_main:
+            self.main_text.append(data)
+        if self.in_p:
+            self.paragraphs.append(data)
+
+    def text(self):
+        parts = self.article_text or self.main_text or self.paragraphs
+        return re.sub(r'\s+', ' ', html.unescape(' '.join(parts))).strip()[:18000]
+
+
+def publisher_host(host):
+    host = (host or '').lower().removeprefix('www.')
+    return any(host == domain or host.endswith('.' + domain)
+               for domain in ('classiquenews.com', 'classykeo.com',
+                              'resmusica.com', 'bachtrack.com',
+                              'forumopera.com', 'concertclassic.com'))
+
+
+def robots_allowed(host, url, cache):
+    if host not in cache:
+        robot = RobotFileParser()
+        robot.set_url('https://' + host + '/robots.txt')
+        try:
+            robot.read()
+            cache[host] = robot
+        except Exception:
+            cache[host] = None
+    robot = cache[host]
+    return robot is not None and robot.can_fetch(UA, url)
+
+
+def public_body(session, url, robots_cache):
+    """Best-effort public HTML extraction; never fetch a publisher before robots check."""
+    parsed = urlparse(url)
+    if parsed.scheme != 'https' or not parsed.hostname:
+        return '', 'unsupported_url'
+    if parsed.hostname == 'news.google.com':
+        # Google RSS links often show a Google landing page rather than redirect.
+        # Do not guess an article URL from unrelated links on that page.
+        try:
+            response = session.get(url, timeout=10, allow_redirects=False,
+                                   headers={'User-Agent': UA})
+            try:
+                if response.status_code not in (301, 302, 303, 307, 308):
+                    return '', 'google_link_not_resolved'
+                from urllib.parse import urljoin
+                url = urljoin(url, response.headers.get('location', ''))
+                parsed = urlparse(url)
+            finally:
+                response.close()
+        except requests.RequestException:
+            return '', 'google_link_not_resolved'
+    if parsed.scheme != 'https' or not parsed.hostname or not publisher_host(parsed.hostname):
+        return '', 'other_publisher'
+    if not robots_allowed(parsed.hostname, url, robots_cache):
+        return '', 'robots_unavailable_or_disallowed'
+    try:
+        response = session.get(url, timeout=10, stream=True, allow_redirects=False,
+                               headers={'User-Agent': UA, 'Accept': 'text/html'})
+        try:
+            if response.status_code != 200 or 'html' not in response.headers.get('content-type', '').lower():
+                return '', 'not_accessible'
+            chunks, total = [], 0
+            for chunk in response.iter_content(32768):
+                total += len(chunk)
+                if total > MAX_BYTES:
+                    return '', 'too_large'
+                chunks.append(chunk)
+            parser = ArticleParser()
+            parser.feed(b''.join(chunks).decode(response.encoding or 'utf-8', errors='replace'))
+            body = parser.text()
+            return (body, 'read') if len(body) >= 150 else ('', 'no_article_body')
+        finally:
+            response.close()
+    except (requests.RequestException, ValueError, UnicodeError):
+        return '', 'fetch_failed'
 
 
 def search_queries(names):
-    # Limit network calls so the scheduled GitHub Action remains practical.
-    # Broad discovery first, then targeted searches for specialist reviews.
-    variants = list(dict.fromkeys(names))
-    main = '"' + variants[0].replace('"', '') + '"'
+    main = '"' + names[0] + '"'
     yield main + ' (critique OR review OR "compte rendu")'
     yield main + ' (concert OR opéra OR opera) critique'
-    for alias in variants[1:3]:
-        quoted = '"' + alias.replace('"', '') + '"'
-        yield quoted + ' (critique OR review)'
-    # Alternate specialist sites on successive searches; the broad searches
-    # above are not publisher-restricted and can find any of the six sources.
+    for alias in names[1:3]:
+        yield '"' + alias + '" (critique OR review)'
     for domain in ('classiquenews.com', 'classykeo.com', 'resmusica.com'):
         yield 'site:' + domain + ' ' + main
 
 
 def run(store, google_news):
-    """Search, validate and submit candidates; store() handles duplicate URLs."""
-    total_submitted = 0
-    global_seen = set()
-    for orchestra, names in ALIASES.items():
-        stats = {'fetched': 0, 'duplicate': 0, 'no_name': 0,
-                 'not_review': 0, 'submitted': 0, 'possible': 0, 'errors': 0}
-        debug_samples = {'no_orchestra_match': [], 'not_review': []}
-        for query in dict.fromkeys(search_queries(names)):
+    session = requests.Session()
+    robots_cache = {}
+    seen = set()
+    total = 0
+    for orchestra, aliases in ALIASES.items():
+        stats = {'fetched': 0, 'body_read': 0, 'no_body': 0,
+                 'no_orchestra_match': 0, 'not_review': 0,
+                 'confirmed': 0, 'possible_unreviewed': 0, 'errors': 0}
+        samples = []
+        attempted = 0
+        for query in dict.fromkeys(search_queries(aliases)):
             try:
                 for article in google_news(query, orchestra):
                     stats['fetched'] += 1
-                    url = article.get('url')
-                    if not url:
+                    url = article.get('url', '')
+                    if not url or url in seen:
                         continue
-                    # Don't mark an article as seen before checking whether it
-                    # matches: another query might have better metadata.
-                    if url in global_seen:
-                        stats['duplicate'] += 1
+                    title = article.get('title') or ''
+                    summary = article.get('summary') or ''
+                    snippet = fold(title + ' ' + summary)
+                    # Fetch only promising results, and bound total HTTP traffic.
+                    candidate = named(snippet, aliases) or specialist(article)
+                    body, fetch_status = '', 'skipped'
+                    if candidate and attempted < MAX_FETCHES_PER_ORCHESTRA:
+                        attempted += 1
+                        body, fetch_status = public_body(session, url, robots_cache)
+                        stats['body_read' if body else 'no_body'] += 1
+                    combined = fold(title + ' ' + summary + ' ' + body)
+                    if not named(combined, aliases):
+                        stats['no_orchestra_match'] += 1
+                        if orchestra == DEBUG_ORCHESTRA and len(samples) < DEBUG_LIMIT:
+                            samples.append(('no_match', title, fetch_status))
                         continue
-                    if not orchestra_matches(article, names):
-                        stats['no_name'] += 1
-                        if orchestra == DEBUG_ORCHESTRA and len(debug_samples['no_orchestra_match']) < DEBUG_SAMPLE_LIMIT:
-                            debug_samples['no_orchestra_match'].append((query, article.get('title', ''), article.get('source', '')))
-                        continue
-                    confirmed = is_review(article)
-                    possible = not confirmed and is_possible_review(article)
+                    confirmed = looks_review(title, summary, body)
+                    possible = not confirmed and specialist(article) and (
+                        any(has(combined, term) for term in PERFORMANCE_TERMS))
                     if not confirmed and not possible:
                         stats['not_review'] += 1
-                        if orchestra == DEBUG_ORCHESTRA and len(debug_samples['not_review']) < DEBUG_SAMPLE_LIMIT:
-                            debug_samples['not_review'].append((query, article.get('title', ''), article.get('source', '')))
                         continue
                     article['orchestra'] = orchestra
                     article['category'] = 'Critique musicale'
                     article['review_status'] = 'validated' if confirmed else 'unreviewed'
+                    # Keep original URL to preserve duplicate handling in Supabase.
                     store(article)
-                    global_seen.add(url)
-                    if confirmed:
-                        stats['submitted'] += 1
-                    else:
-                        stats['possible'] += 1
-                    total_submitted += 1
+                    seen.add(url)
+                    stats['confirmed' if confirmed else 'possible_unreviewed'] += 1
+                    total += 1
             except Exception as exc:
                 stats['errors'] += 1
-                print(f'REVIEW WARNING {orchestra}: {query[:90]}: {exc}', flush=True)
+                print(f'REVIEW WARNING {orchestra}: {str(exc)[:160]}', flush=True)
             time.sleep(0.15)
-        print(f'REVIEW {orchestra}: fetched={stats["fetched"]}, '
-              f'duplicate_in_run={stats["duplicate"]}, '
-              f'no_orchestra_match={stats["no_name"]}, '
-              f'not_review={stats["not_review"]}, '
-              f'confirmed={stats["submitted"]}, possible_unreviewed={stats["possible"]}, errors={stats["errors"]}', flush=True)
+        print('REVIEW ' + orchestra + ': ' + ', '.join(
+            f'{key}={value}' for key, value in stats.items()), flush=True)
         if orchestra == DEBUG_ORCHESTRA:
-            for reason, examples in debug_samples.items():
-                for i, (query, title, source) in enumerate(examples, 1):
-                    # Keep logs short and readable; only public article metadata.
-                    safe_title = ' '.join(str(title).split())[:180]
-                    safe_source = ' '.join(str(source).split())[:60]
-                    print(f'REVIEW DEBUG {orchestra} {reason} #{i}: '
-                          f'{safe_title!r} | source={safe_source!r} | query={query[:100]!r}',
-                          flush=True)
-    print(f'Review discovery: {total_submitted} candidates submitted '
-          '(existing database URLs may be ignored by store)', flush=True)
-    return total_submitted
+            for reason, title, status in samples:
+                print(f'REVIEW DEBUG ONPL {reason}: {title[:125]!r} body={status}', flush=True)
+    print(f'Review discovery: {total} candidates submitted (database duplicates may be ignored)', flush=True)
+    return total
