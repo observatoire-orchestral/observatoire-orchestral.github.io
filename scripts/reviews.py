@@ -1,133 +1,134 @@
-"""Review discovery for French professional orchestras (concerts and opera).
+"""Discover public concert and opera reviews of French professional orchestras.
 
-Uses the existing Google News RSS reader from collect.py. No direct scraping,
-paid API, or paywall access. Call run(store, google_news) from collect.py.
+Uses collect.py's existing google_news(query, orchestra) and store(article).
+No direct publisher scraping, paywall access, or paid API.
 """
 import re
 import time
 import unicodedata
 
-# Canonical labels MUST match the orchestra values in collect.py.
-# Short ambiguous abbreviations (ONL, ONB, etc.) are deliberately omitted.
+# Canonical names must match collect.py / the website's orchestra filter.
 ALIASES = {
-    'ONPL': ('Orchestre National des Pays de la Loire', 'ONPL'),
+    'ONPL': ('Orchestre National des Pays de la Loire', 'ONPL', 'Orchestre des Pays de la Loire'),
     'Orchestre de Paris': ('Orchestre de Paris',),
     'Orchestre national de Lyon': ('Orchestre national de Lyon',),
     'Orchestre national de Lille': ('Orchestre national de Lille',),
-    'Orchestre national de Bordeaux Aquitaine': (
-        'Orchestre national Bordeaux Aquitaine',
-        'Orchestre national de Bordeaux Aquitaine', 'ONBA',
-    ),
-    'Orchestre national du Capitole de Toulouse': (
-        'Orchestre national du Capitole de Toulouse',
-        'Orchestre national du Capitole', 'Orchestre du Capitole de Toulouse',
-    ),
+    'Orchestre national de Bordeaux Aquitaine': ('Orchestre national Bordeaux Aquitaine', 'Orchestre national de Bordeaux Aquitaine', 'ONBA'),
+    'Orchestre national du Capitole de Toulouse': ('Orchestre national du Capitole de Toulouse', 'Orchestre national du Capitole', 'Orchestre du Capitole de Toulouse'),
     'Orchestre philharmonique de Strasbourg': ('Orchestre philharmonique de Strasbourg',),
-    'Orchestre national de Metz': (
-        'Orchestre national de Metz', 'Orchestre national de Metz Grand Est',
-    ),
+    'Orchestre national de Metz': ('Orchestre national de Metz', 'Orchestre national de Metz Grand Est'),
     'Orchestre national de Bretagne': ('Orchestre national de Bretagne',),
-    'Orchestre national de Montpellier': (
-        'Orchestre national Montpellier', 'Orchestre national de Montpellier',
-        'Orchestre national Montpellier Occitanie',
-    ),
-    'Orchestre de l’Opéra de Nice': (
-        "Orchestre de l'Opéra de Nice", 'Orchestre Philharmonique de Nice',
-    ),
-    'Orchestre national d’Île-de-France': (
-        "Orchestre national d'Île-de-France", 'ONDIF',
-    ),
-    'Orchestre de l’Opéra de Marseille': (
-        "Orchestre de l'Opéra de Marseille", 'Orchestre Philharmonique de Marseille',
-    ),
-    'Orchestre national Avignon-Provence': (
-        'Orchestre national Avignon-Provence', "Orchestre national d'Avignon-Provence",
-    ),
+    'Orchestre national de Montpellier': ('Orchestre national Montpellier', 'Orchestre national de Montpellier', 'Orchestre national Montpellier Occitanie'),
+    'Orchestre de l’Opéra de Nice': ("Orchestre de l'Opéra de Nice", 'Orchestre Philharmonique de Nice'),
+    'Orchestre national d’Île-de-France': ("Orchestre national d'Île-de-France", 'ONDIF'),
+    'Orchestre de l’Opéra de Marseille': ("Orchestre de l'Opéra de Marseille", 'Orchestre Philharmonique de Marseille'),
+    'Orchestre national Avignon-Provence': ('Orchestre national Avignon-Provence', "Orchestre national d'Avignon-Provence"),
     'Orchestre national de Cannes': ('Orchestre national de Cannes',),
 }
 
-# Sources to prioritise in searches. We do not assume every article from these
-# publishers is a review: a review signal is still required.
-REVIEW_DOMAINS = (
-    'classiquenews.com', 'classykeo.com', 'resmusica.com',
-    'bachtrack.com', 'forumopera.com', 'concertclassic.com',
-)
-REVIEW_TERMS = (
-    'critique', 'compte rendu', 'chronique', 'recension', 'review',
-    'nous avons assiste', 'on a assiste', 'concert review',
-)
-PERFORMANCE_TERMS = (
-    'concert', 'symphonie', 'concerto', 'opera', 'representation',
-    'recital', 'spectacle', 'festival', 'interpretation', 'production',
-)
-NON_REVIEW_TERMS = (
-    'annonce', 'billetterie', 'appel a candidature', 'recrutement',
-    'offre d emploi', 'programme de saison',
-)
+REVIEW_DOMAINS = ('classiquenews.com', 'classykeo.com', 'resmusica.com',
+                  'bachtrack.com', 'forumopera.com', 'concertclassic.com')
+REVIEW_SIGNALS = ('critique', 'compte rendu', 'review', 'recension', 'chronique',
+                  'nous avons assiste', 'on a assiste', 'a l affiche',
+                  'concert review', 'opera review')
+PERFORMANCE_SIGNALS = ('concert', 'symphonie', 'concerto', 'opera', 'representation',
+                       'recital', 'festival', 'interpretation', 'production',
+                       'direction', 'brahms', 'beethoven', 'mozart', 'mahler',
+                       'debussy', 'ravel', 'verdi', 'wagner', 'puccini', 'massenet')
+EXCLUDE = ('billetterie', 'appel a candidature', 'recrutement', 'offre d emploi',
+           'programme de saison', 'annonce de saison', 'abonnement saison')
 
 
 def fold(value):
     value = unicodedata.normalize('NFKD', str(value or '').casefold())
-    return re.sub(r'[^a-z0-9]+', ' ', ''.join(
-        c for c in value if not unicodedata.combining(c)
-    )).strip()
+    value = ''.join(c for c in value if not unicodedata.combining(c))
+    return re.sub(r'[^a-z0-9]+', ' ', value).strip()
 
 
-def contains_phrase(text, phrase):
+def has_phrase(normalized_text, phrase):
     target = fold(phrase)
-    return bool(target and re.search(r'(?<!\w)' + re.escape(target) + r'(?!\w)', text))
+    return bool(target and re.search(r'(?<!\w)' + re.escape(target) + r'(?!\w)', normalized_text))
 
 
-def matches_orchestra(article, names):
-    text = fold((article.get('title') or '') + ' ' + (article.get('summary') or ''))
-    return any(contains_phrase(text, name) for name in names)
+def article_text(article):
+    return fold((article.get('title') or '') + ' ' + (article.get('summary') or ''))
+
+
+def orchestra_matches(article, names):
+    text = article_text(article)
+    return any(has_phrase(text, alias) for alias in names)
 
 
 def is_review(article):
-    text = fold((article.get('title') or '') + ' ' + (article.get('summary') or ''))
-    if any(contains_phrase(text, word) for word in NON_REVIEW_TERMS):
+    title = fold(article.get('title'))
+    text = article_text(article)
+    if any(has_phrase(title, word) for word in EXCLUDE):
         return False
-    # Explicit review language is strongest. A specialist source alone is not
-    # enough: news, interviews and announcements are also published there.
-    return (any(contains_phrase(text, term) for term in REVIEW_TERMS)
-            and any(contains_phrase(text, term) for term in PERFORMANCE_TERMS))
+    # A clear review marker in the title is sufficient: titles often omit
+    # generic words such as 'concert' even for actual performance reviews.
+    if any(has_phrase(title, word) for word in REVIEW_SIGNALS):
+        return True
+    # Otherwise require both review language and performance context.
+    return (any(has_phrase(text, word) for word in REVIEW_SIGNALS)
+            and any(has_phrase(text, word) for word in PERFORMANCE_SIGNALS))
 
 
 def search_queries(names):
-    # Prefer the full name, then an abbreviation if it is distinctive.
-    main = names[0]
-    aliases = [main]
-    aliases.extend(name for name in names[1:] if len(name) <= 5)
-    expression = '(' + ' OR '.join('"' + name + '"' for name in aliases) + ')'
-    yield expression + ' ("critique" OR "compte rendu" OR "review") concert'
-    yield expression + ' ("critique" OR "compte rendu" OR "review") (opéra OR opera)'
-    # Prioritise the two publishers already yielding real reviews in this project.
-    for domain in REVIEW_DOMAINS[:2]:
-        yield 'site:' + domain + ' "' + main + '" (critique OR concert OR opéra)'
+    # Limit network calls so the scheduled GitHub Action remains practical.
+    # Broad discovery first, then targeted searches for specialist reviews.
+    variants = list(dict.fromkeys(names))
+    main = '"' + variants[0].replace('"', '') + '"'
+    yield main + ' (critique OR review OR "compte rendu")'
+    yield main + ' (concert OR opéra OR opera) critique'
+    for alias in variants[1:3]:
+        quoted = '"' + alias.replace('"', '') + '"'
+        yield quoted + ' (critique OR review)'
+    # Alternate specialist sites on successive searches; the broad searches
+    # above are not publisher-restricted and can find any of the six sources.
+    for domain in ('classiquenews.com', 'classykeo.com', 'resmusica.com'):
+        yield 'site:' + domain + ' ' + main
 
 
 def run(store, google_news):
-    """Submit new review candidates; existing URLs remain untouched by store()."""
-    count, seen = 0, set()
+    """Search, validate and submit candidates; store() handles duplicate URLs."""
+    total_submitted = 0
+    global_seen = set()
     for orchestra, names in ALIASES.items():
-        orchestra_count = 0
-        for query in search_queries(names):
+        stats = {'fetched': 0, 'duplicate': 0, 'no_name': 0,
+                 'not_review': 0, 'submitted': 0, 'errors': 0}
+        for query in dict.fromkeys(search_queries(names)):
             try:
                 for article in google_news(query, orchestra):
+                    stats['fetched'] += 1
                     url = article.get('url')
-                    if not url or url in seen:
+                    if not url:
                         continue
-                    seen.add(url)
-                    if not matches_orchestra(article, names) or not is_review(article):
+                    # Don't mark an article as seen before checking whether it
+                    # matches: another query might have better metadata.
+                    if url in global_seen:
+                        stats['duplicate'] += 1
+                        continue
+                    if not orchestra_matches(article, names):
+                        stats['no_name'] += 1
+                        continue
+                    if not is_review(article):
+                        stats['not_review'] += 1
                         continue
                     article['orchestra'] = orchestra
                     article['category'] = 'Critique musicale'
                     store(article)
-                    count += 1
-                    orchestra_count += 1
+                    global_seen.add(url)
+                    stats['submitted'] += 1
+                    total_submitted += 1
             except Exception as exc:
-                print(f'REVIEW WARNING {orchestra}: {exc}')
-            time.sleep(0.3)
-        print(f'REVIEW {orchestra}: {orchestra_count} candidates submitted')
-    print(f'Review discovery: {count} candidates submitted (duplicates ignored by store)')
-    return count
+                stats['errors'] += 1
+                print(f'REVIEW WARNING {orchestra}: {query[:90]}: {exc}', flush=True)
+            time.sleep(0.15)
+        print(f'REVIEW {orchestra}: fetched={stats["fetched"]}, '
+              f'duplicate_in_run={stats["duplicate"]}, '
+              f'no_orchestra_match={stats["no_name"]}, '
+              f'not_review={stats["not_review"]}, '
+              f'submitted={stats["submitted"]}, errors={stats["errors"]}', flush=True)
+    print(f'Review discovery: {total_submitted} candidates submitted '
+          '(existing database URLs may be ignored by store)', flush=True)
+    return total_submitted
