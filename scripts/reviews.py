@@ -40,6 +40,12 @@ PERFORMANCE_SIGNALS = ('concert', 'symphonie', 'concerto', 'opera', 'representat
 DEBUG_ORCHESTRA = 'ONPL'
 DEBUG_SAMPLE_LIMIT = 6
 
+# Possible reviews require an explicitly named orchestra, a specialist publisher,
+# and a performance clue. They remain unpublished until an admin reviews them.
+POSSIBLE_REVIEW_SOURCES = ('classiquenews', 'classykeo', 'resmusica',
+                           'bachtrack', 'forumopera', 'forum opera',
+                           'concertclassic')
+
 EXCLUDE = ('billetterie', 'appel a candidature', 'recrutement', 'offre d emploi',
            'programme de saison', 'annonce de saison', 'abonnement saison')
 
@@ -78,6 +84,26 @@ def is_review(article):
             and any(has_phrase(text, word) for word in PERFORMANCE_SIGNALS))
 
 
+
+def is_possible_review(article):
+    """A specialist performance article needing human review, not publication."""
+    title = fold(article.get('title'))
+    text = article_text(article)
+    source = fold(article.get('source'))
+    if any(has_phrase(title, word) for word in EXCLUDE):
+        return False
+    if not any(has_phrase(source, name) for name in POSSIBLE_REVIEW_SOURCES):
+        return False
+    # Avoid treating orchestra season previews and calendar listings as reviews.
+    if any(has_phrase(title, term) for term in (
+        'saison 2026 2027', 'saison 2025 2026', 'saison 2027 2028',
+        'agenda', 'calendrier', 'programme', 'a venir', 'prochain concert',
+        'ven 25', 'sam 26', 'dim 27', 'reservation', 'dates des concerts',
+    )):
+        return False
+    return any(has_phrase(text, word) for word in PERFORMANCE_SIGNALS)
+
+
 def search_queries(names):
     # Limit network calls so the scheduled GitHub Action remains practical.
     # Broad discovery first, then targeted searches for specialist reviews.
@@ -100,7 +126,7 @@ def run(store, google_news):
     global_seen = set()
     for orchestra, names in ALIASES.items():
         stats = {'fetched': 0, 'duplicate': 0, 'no_name': 0,
-                 'not_review': 0, 'submitted': 0, 'errors': 0}
+                 'not_review': 0, 'submitted': 0, 'possible': 0, 'errors': 0}
         debug_samples = {'no_orchestra_match': [], 'not_review': []}
         for query in dict.fromkeys(search_queries(names)):
             try:
@@ -119,16 +145,22 @@ def run(store, google_news):
                         if orchestra == DEBUG_ORCHESTRA and len(debug_samples['no_orchestra_match']) < DEBUG_SAMPLE_LIMIT:
                             debug_samples['no_orchestra_match'].append((query, article.get('title', ''), article.get('source', '')))
                         continue
-                    if not is_review(article):
+                    confirmed = is_review(article)
+                    possible = not confirmed and is_possible_review(article)
+                    if not confirmed and not possible:
                         stats['not_review'] += 1
                         if orchestra == DEBUG_ORCHESTRA and len(debug_samples['not_review']) < DEBUG_SAMPLE_LIMIT:
                             debug_samples['not_review'].append((query, article.get('title', ''), article.get('source', '')))
                         continue
                     article['orchestra'] = orchestra
                     article['category'] = 'Critique musicale'
+                    article['review_status'] = 'validated' if confirmed else 'unreviewed'
                     store(article)
                     global_seen.add(url)
-                    stats['submitted'] += 1
+                    if confirmed:
+                        stats['submitted'] += 1
+                    else:
+                        stats['possible'] += 1
                     total_submitted += 1
             except Exception as exc:
                 stats['errors'] += 1
@@ -138,7 +170,7 @@ def run(store, google_news):
               f'duplicate_in_run={stats["duplicate"]}, '
               f'no_orchestra_match={stats["no_name"]}, '
               f'not_review={stats["not_review"]}, '
-              f'submitted={stats["submitted"]}, errors={stats["errors"]}', flush=True)
+              f'confirmed={stats["submitted"]}, possible_unreviewed={stats["possible"]}, errors={stats["errors"]}', flush=True)
         if orchestra == DEBUG_ORCHESTRA:
             for reason, examples in debug_samples.items():
                 for i, (query, title, source) in enumerate(examples, 1):
