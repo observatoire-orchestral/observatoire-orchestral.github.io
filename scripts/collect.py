@@ -35,14 +35,6 @@ def clean(value):
     return re.sub(r'\s+', ' ', html.unescape(re.sub(r'<[^>]+>', ' ', str(value or '')))).strip()[:1200]
 
 
-def category(text):
-    lower = text.casefold()
-    for name, words in TOPICS:
-        if any(word in lower for word in words):
-            return name
-    return 'Autres'
-
-
 def published(entry):
     # feedparser struct_time is UTC. calendar.timegm avoids local-time conversion.
     import calendar
@@ -83,23 +75,6 @@ def normalize(entry, orchestra, fallback_source):
         if hasattr(source_info, 'get') else ''
     ) or fallback_source
 
-    # Recognise specialist music-review publications
-    review_sources = (
-        'bachtrack',
-        'resmusica',
-        'forumopera',
-        'forum opéra',
-        'concertclassic',
-    )
-
-    source_text = source.casefold()
-    domain = urlparse(link).netloc.casefold()
-
-    is_review_source = any(
-        name in source_text or name.replace(' ', '') in domain
-        for name in review_sources
-    )
-
     return {
         'url': link,
         'title': title,
@@ -110,14 +85,11 @@ def normalize(entry, orchestra, fallback_source):
     orchestra
 ),
 
-        'category': (
-            'Critique musicale'
-            if is_review_source
-            else category(title + ' ' + summary)
-        ),
+        # The shared classifier in store() makes the final category decision.
+        'category': 'Autres',
         'published_at': published(entry),
         'is_auto': True,
-        'review_status': 'validated',
+        'review_status': 'unreviewed',
     }
 
 
