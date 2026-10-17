@@ -230,7 +230,7 @@
       const { data, error } = await db
         .from('articles')
         .select(
-          'id,title,url,source,published_at,found_at,orchestra,category,summary,review_status'
+          'id,title,url,source,published_at,found_at,orchestra,category,summary,review_status,is_auto,reviewed_by'
         )
         .order('published_at', {
           ascending: false,
@@ -378,6 +378,7 @@
               statusText[a.review_status] || a.review_status
             )}
           </span>
+          <span class="status"> · ${a.reviewed_by ? 'Révision humaine enregistrée' : (a.is_auto ? 'Collecte automatique · validation humaine non attestée' : 'Origine manuelle')}</span>
         </div>
       `;
 
