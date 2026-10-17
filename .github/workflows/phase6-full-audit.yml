@@ -1,0 +1,25 @@
+name: Phase 6 - Audit intégral (lecture seule)
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  full_audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r requirements.txt
+      - name: Examiner tous les articles sans les modifier
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: python scripts/phase6_full_audit.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: phase6-audit-complet
+          path: phase6_audit/
+          retention-days: 7
