@@ -30,6 +30,7 @@ SESSION.headers.update({'User-Agent': 'Observatoire-SUD-ONPL/2.0 (public RSS mon
 
 ORCHESTRAS = {
     'ONPL': '("ONPL" OR "Orchestre National des Pays de la Loire")',
+    'Angers Nantes Opéra': '("Angers Nantes Opéra" OR "Angers Nantes Opera" OR "Angers-Nantes Opéra")',
     'Orchestre de Paris': '"Orchestre de Paris"',
     'Orchestre national de Lyon': '"Orchestre national de Lyon"',
     'Orchestre national de Lille': '"Orchestre national de Lille"',
