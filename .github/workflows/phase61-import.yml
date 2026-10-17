@@ -1,0 +1,29 @@
+name: Phase 6.1 - Import des propositions éditoriales
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "preview = vérification ; apply = importer dans la table séparée"
+        required: true
+        type: choice
+        options: [preview, apply]
+        default: preview
+permissions:
+  contents: read
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r requirements.txt
+      - name: Importer les propositions (aucun changement aux articles)
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          MODE: ${{ inputs.mode }}
+        run: |
+          if [ "$MODE" = apply ]; then python scripts/phase61_import.py --apply; else python scripts/phase61_import.py; fi
