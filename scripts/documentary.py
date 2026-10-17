@@ -29,6 +29,18 @@ TOPICS = [
 def fold(s):
     return ''.join(c for c in unicodedata.normalize('NFKD', str(s or '').lower()) if not unicodedata.combining(c))
 
+def identify_orchestra(text, default):
+    text = fold(text)
+
+    if (
+        re.search(r'\bonpl\b', text)
+        or 'orchestre national des pays de la loire' in text
+        or 'orchestre national des pays-de-la-loire' in text
+    ):
+        return 'ONPL'
+
+    return default
+
 def label(text):
     t = fold(text)
     for category, keys in TOPICS:
