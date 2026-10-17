@@ -50,6 +50,14 @@ ORCHESTRA_TERMS = '(budget OR subvention OR grève OR syndicat OR recrutement OR
 SECTOR = 'Secteur orchestral français'
 SECTOR_QUERIES = [
     
+    # ONPL — music reviews
+    'site:resmusica.com "Orchestre National des Pays de la Loire"',
+    'site:bachtrack.com "Orchestre National des Pays de la Loire"',
+    'site:forumopera.com "Orchestre National des Pays de la Loire"',
+    'site:concertclassic.com "Orchestre National des Pays de la Loire"',
+    '"ONPL" "critique" concert',
+    '"Orchestre National des Pays de la Loire" "critique"',
+
     # Critiques musicales — presse spécialisée
     'site:bachtrack.com "Orchestre de Paris"',
     'site:bachtrack.com "orchestre national" France',
