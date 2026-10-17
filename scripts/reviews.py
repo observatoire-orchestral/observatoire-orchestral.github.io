@@ -9,7 +9,7 @@ import re
 import time
 import unicodedata
 from html.parser import HTMLParser
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urljoin
 from urllib.robotparser import RobotFileParser
 
 import requests
@@ -46,6 +46,16 @@ MAX_BYTES = 650_000
 MAX_FETCHES_PER_ORCHESTRA = 12
 DEBUG_ORCHESTRA = 'ONPL'
 DEBUG_LIMIT = 5
+
+# Contextual opera reviews are suggestions, never automatically validated.
+# Venue alone cannot prove which orchestra performed.
+CONTEXT = {
+    'ONPL': ('theatre graslin', 'opera de nantes', 'angers nantes opera'),
+    'Angers Nantes Opéra': ('theatre graslin', 'opera de nantes', 'grand theatre d angers'),
+    'Orchestre de l’Opéra de Nice': ('opera de nice',),
+    'Orchestre de l’Opéra de Marseille': ('opera de marseille',),
+}
+
 
 
 def fold(value):
@@ -204,8 +214,12 @@ def search_queries(names):
     yield main + ' (concert OR opéra OR opera) critique'
     for alias in names[1:3]:
         yield '"' + alias + '" (critique OR review)'
-    for domain in ('classiquenews.com', 'classykeo.com', 'resmusica.com'):
+    for domain in ('classiquenews.com', 'classykeo.com', 'resmusica.com', 'forumopera.com'):
         yield 'site:' + domain + ' ' + main
+    if 'ONPL' in names:
+        yield '("ONPL" OR "Orchestre National des Pays de la Loire") ("Orphée et Eurydice" OR "Théâtre Graslin") critique'
+    if 'Angers Nantes Opéra' in names:
+        yield '("Angers Nantes Opéra" OR "Théâtre Graslin") (critique OR "compte rendu") opéra'
 
 
 def run(store, google_news):
@@ -237,20 +251,32 @@ def run(store, google_news):
                         body, fetch_status = public_body(session, url, robots_cache)
                         stats['body_read' if body else 'no_body'] += 1
                     combined = fold(title + ' ' + summary + ' ' + body)
-                    if not named(combined, aliases):
+                    explicit_match = named(combined, aliases)
+                    review_signal = looks_review(title, summary, body)
+                    # A named opera venue may indicate a relevant production, but
+                    # it does not establish the participating orchestra.
+                    context_match = (specialist(article) and review_signal
+                                     and any(has(combined, place)
+                                             for place in CONTEXT.get(orchestra, ())))
+                    if not explicit_match and not context_match:
                         stats['no_orchestra_match'] += 1
                         if orchestra == DEBUG_ORCHESTRA and len(samples) < DEBUG_LIMIT:
                             samples.append(('no_match', title, fetch_status))
                         continue
-                    confirmed = looks_review(title, summary, body)
-                    possible = not confirmed and specialist(article) and (
-                        any(has(combined, term) for term in PERFORMANCE_TERMS))
+                    confirmed = explicit_match and review_signal
+                    possible = context_match or (explicit_match and not confirmed
+                        and specialist(article) and any(has(combined, term)
+                                                       for term in PERFORMANCE_TERMS))
                     if not confirmed and not possible:
                         stats['not_review'] += 1
                         continue
                     article['orchestra'] = orchestra
                     article['category'] = 'Critique musicale'
                     article['review_status'] = 'validated' if confirmed else 'unreviewed'
+                    if context_match and not explicit_match:
+                        article['summary'] = ('Possible association with ' + orchestra
+                            + ' based on the venue; verify participating orchestra. '
+                            + (article.get('summary') or ''))[:1200]
                     # Keep original URL to preserve duplicate handling in Supabase.
                     store(article)
                     seen.add(url)
