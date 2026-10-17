@@ -222,19 +222,62 @@ def extra_feeds():
 
 
 def store(article):
-    response = SESSION.post(
-        URL + '/rest/v1/articles?on_conflict=url',
-        json=article,
-        headers={
-            **HEADERS,
-            'Accept': 'application/json',
-        },
-        timeout=25,
+    """Insert new URLs; cautiously improve only still-unreviewed records.
+
+    A validated/rejected record may represent a human decision, so it is never
+    changed automatically. Do not downgrade a specific orchestra or review tag.
+    """
+    url = article.get('url')
+    if not url:
+        raise ValueError('Article URL is required')
+
+    lookup = SESSION.get(
+        URL + '/rest/v1/articles',
+        params={'select': 'url,orchestra,category,review_status',
+                'url': 'eq.' + url, 'limit': '1'},
+        headers={'Accept': 'application/json'}, timeout=25,
     )
-    if not response.ok:
-        raise RuntimeError(
-            f'{response.status_code}: {response.text[:350]}'
+    lookup.raise_for_status()
+    rows = lookup.json()
+    if not rows:
+        response = SESSION.post(
+            URL + '/rest/v1/articles?on_conflict=url',
+            json=article,
+            headers={**HEADERS, 'Accept': 'application/json'}, timeout=25,
         )
+        if not response.ok:
+            raise RuntimeError(f'{response.status_code}: {response.text[:350]}')
+        return
+
+    old = rows[0]
+    if old.get('review_status') != 'unreviewed':
+        return  # Never overwrite potentially human-reviewed classifications.
+
+    changes = {}
+    # Only improve a generic category to a positively detected music review.
+    if (article.get('category') == 'Critique musicale'
+            and old.get('category') == 'Autres'):
+        changes['category'] = 'Critique musicale'
+
+    # A sector-wide record may gain a specific orchestra association, but
+    # never replace one named ensemble with another automatically.
+    if (old.get('orchestra') == SECTOR
+            and article.get('orchestra') not in (None, '', SECTOR)):
+        changes['orchestra'] = article['orchestra']
+
+    # Leave review_status untouched: automatic collection must not validate
+    # or reject a record already queued for manual review.
+    if changes:
+        response = SESSION.patch(
+            URL + '/rest/v1/articles',
+            params={'url': 'eq.' + url, 'review_status': 'eq.unreviewed'},
+            json=changes,
+            headers={'Content-Type': 'application/json',
+                     'Prefer': 'return=minimal'},
+            timeout=25,
+        )
+        if not response.ok:
+            raise RuntimeError(f'{response.status_code}: {response.text[:350]}')
 
 
 def main():
@@ -288,7 +331,7 @@ def main():
     except Exception as exc:
         print(f'DOCUMENTARY WARNING: {exc}', file=sys.stderr)
 
-    print(f'Collecte terminée : {proposed} entrées proposées (doublons ignorés), {len(errors)} erreurs')
+    print(f'Collecte terminée : {proposed} entrées proposées (doublons protégés, corrections prudentes), {len(errors)} erreurs')
     if errors:
         sys.exit(1)
 
