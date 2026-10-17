@@ -222,61 +222,22 @@ def extra_feeds():
 
 
 def store(article):
-    """Insert new URLs; cautiously improve only still-unreviewed records.
+    """Classify once, insert only new URLs, preserve all existing records.
 
-    A validated/rejected record may represent a human decision, so it is never
-    changed automatically. Do not downgrade a specific orchestra or review tag.
+    A later phase can update existing articles after human-approved rules.
+    No read-before-write is required: the unique URL constraint handles duplicates.
     """
-    url = article.get('url')
-    if not url:
-        raise ValueError('Article URL is required')
-
-    lookup = SESSION.get(
-        URL + '/rest/v1/articles',
-        params={'select': 'url,orchestra,category,review_status',
-                'url': 'eq.' + url, 'limit': '1'},
-        headers={**HEADERS, 'Accept': 'application/json'}, timeout=25,
+    from classification import prepare
+    item = prepare(article)
+    response = SESSION.post(
+        URL + '/rest/v1/articles?on_conflict=url',
+        json=item,
+        headers={**HEADERS, 'Prefer': 'resolution=ignore-duplicates,return=minimal',
+                 'Accept': 'application/json'},
+        timeout=25,
     )
-    lookup.raise_for_status()
-    rows = lookup.json()
-    if not rows:
-        response = SESSION.post(
-            URL + '/rest/v1/articles?on_conflict=url',
-            json=article,
-            headers={**HEADERS, 'Accept': 'application/json'}, timeout=25,
-        )
-        if not response.ok:
-            raise RuntimeError(f'{response.status_code}: {response.text[:350]}')
-        return
-
-    old = rows[0]
-    if old.get('review_status') != 'unreviewed':
-        return  # Never overwrite potentially human-reviewed classifications.
-
-    changes = {}
-    # Only improve a generic category to a positively detected music review.
-    if (article.get('category') == 'Critique musicale'
-            and old.get('category') == 'Autres'):
-        changes['category'] = 'Critique musicale'
-
-    # A sector-wide record may gain a specific orchestra association, but
-    # never replace one named ensemble with another automatically.
-    if (old.get('orchestra') == SECTOR
-            and article.get('orchestra') not in (None, '', SECTOR)):
-        changes['orchestra'] = article['orchestra']
-
-    # Leave review_status untouched: automatic collection must not validate
-    # or reject a record already queued for manual review.
-    if changes:
-        response = SESSION.patch(
-            URL + '/rest/v1/articles',
-            params={'url': 'eq.' + url, 'review_status': 'eq.unreviewed'},
-            json=changes,
-            headers={**HEADERS, 'Prefer': 'return=minimal'},
-            timeout=25,
-        )
-        if not response.ok:
-            raise RuntimeError(f'{response.status_code}: {response.text[:350]}')
+    if not response.ok:
+        raise RuntimeError(f'{response.status_code}: {response.text[:350]}')
 
 
 def main():
