@@ -37,14 +37,14 @@
   );
 
   let currentUser = null;
-  let isAdmin = false;
+  let canReview = false;
   let records = [];
   let shown = 0;
 
   const pageSize = 40;
 
   const statusText = {
-    unreviewed: 'Non examiné',
+    unreviewed: 'À vérifier',
     validated: 'Validé',
     rejected: 'Rejeté'
   };
@@ -124,7 +124,7 @@
       return;
     }
 
-    isAdmin = profile.role === 'admin';
+    canReview = ['admin', 'reviewer'].includes(profile.role);
 
     show('dashboard', true);
     await load();
@@ -387,13 +387,13 @@
         </div>
       `;
 
-      if (isAdmin) {
+      if (canReview) {
         const row = el.querySelector('.review');
 
         for (const [st, label] of [
           ['validated', 'Valider'],
-          ['rejected', 'Rejeter'],
-          ['unreviewed', 'Réinitialiser']
+          ['rejected', 'Écarter'],
+          ['unreviewed', 'Remettre à vérifier']
         ]) {
           const b = document.createElement('button');
           b.className = 'secondary';
@@ -402,6 +402,11 @@
           b.onclick = () => review(a, st);
           row.append(b);
         }
+        const edit = document.createElement('button');
+        edit.className = 'ghost';
+        edit.textContent = 'Corriger le classement';
+        edit.onclick = () => editArticle(a);
+        row.append(edit);
       }
 
       root.append(el);
@@ -411,28 +416,48 @@
   }
 
   async function review(a, status) {
-    const { error } = await db
+    if (!canReview || !currentUser) return;
+    const { data, error } = await db
       .from('articles')
       .update({
         review_status: status,
-        reviewed_at: status === 'unreviewed'
-          ? null
-          : new Date().toISOString(),
-        reviewed_by: status === 'unreviewed'
-          ? null
-          : currentUser.id
+        reviewed_at: status === 'unreviewed' ? null : new Date().toISOString(),
+        reviewed_by: status === 'unreviewed' ? null : currentUser.id
       })
-      .eq('id', a.id);
-
-    if (error) {
-      notice(
-        'Validation impossible : ' + error.message,
-        true
-      );
+      .eq('id', a.id)
+      .eq('review_status', a.review_status)
+      .select('id,review_status,reviewed_at,reviewed_by');
+    if (error || !data?.length) {
+      notice(error ? 'Validation impossible : ' + error.message : 'Cet article a été modifié par un autre membre. Actualisez.', true);
       return;
     }
+    a.review_status = data[0].review_status;
+    notice('Décision enregistrée.');
+    render();
+  }
 
-    a.review_status = status;
+  async function editArticle(a) {
+    if (!canReview || !currentUser) return;
+    const category = prompt('Catégorie (laissez vide pour annuler) :', a.category || 'Autres');
+    if (category === null || !category.trim()) return;
+    const orchestra = prompt('Orchestre / institution (laissez vide pour annuler) :', a.orchestra || 'Autres orchestres');
+    if (orchestra === null || !orchestra.trim()) return;
+    const newCategory = category.trim().slice(0, 180);
+    const newOrchestra = orchestra.trim().slice(0, 180);
+    const { data, error } = await db.from('articles')
+      .update({category: newCategory, orchestra: newOrchestra,
+               review_status: 'validated', reviewed_at: new Date().toISOString(), reviewed_by: currentUser.id})
+      .eq('id', a.id)
+      .eq('category', a.category)
+      .eq('orchestra', a.orchestra)
+      .select('id,category,orchestra,review_status');
+    if (error || !data?.length) {
+      notice(error ? 'Correction impossible : ' + error.message : 'Classement modifié entre-temps. Actualisez.', true);
+      return;
+    }
+    Object.assign(a, data[0]);
+    populate();
+    notice('Classement corrigé et validé.');
     render();
   }
 
