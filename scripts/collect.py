@@ -108,6 +108,18 @@ def published(entry):
             pass
     return None
 
+def identify_orchestra(text, default):
+    text = text.casefold()
+
+    if (
+        re.search(r'\bonpl\b', text)
+        or 'orchestre national des pays de la loire' in text
+        or 'orchestre national des pays-de-la-loire' in text
+    ):
+        return 'ONPL'
+
+    return default
+
 def normalize(entry, orchestra, fallback_source):
     title = clean(entry.get('title'))
     link = (entry.get('link') or '').strip()
