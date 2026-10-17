@@ -24,16 +24,27 @@ ALIASES = {
  'Orchestre de l’Opéra de Marseille': ('Orchestre Philharmonique de Marseille',"Orchestre de l'Opéra de Marseille"),
  'Orchestre national Avignon-Provence': ('Orchestre national Avignon-Provence',"Orchestre national d'Avignon-Provence"),
  'Orchestre national de Cannes': ('Orchestre national de Cannes',),
+ 'Orchestre national de Mulhouse': ('Orchestre national de Mulhouse',),
+ 'Orchestre national de Nancy': ("Orchestre de l'Opéra national de Lorraine",'Orchestre de l’Opéra national de Lorraine'),
+ 'Orchestre national Auvergne-Rhône-Alpes': ('Orchestre national Auvergne-Rhône-Alpes',),
+ 'Orchestre de chambre de Paris': ('Orchestre de chambre de Paris',),
+ 'Orchestre de chambre de Toulouse': ('Orchestre de chambre de Toulouse',),
+ 'Orchestre de Picardie': ('Orchestre de Picardie',),
+ 'Orchestre symphonique de Bretagne': ('Orchestre symphonique de Bretagne',),
+ 'Orchestre symphonique de Mulhouse': ('Orchestre symphonique de Mulhouse',),
+ 'Orchestre symphonique de Saint-Étienne': ('Orchestre symphonique Saint-Étienne',),
+ 'Orchestre de l’Opéra de Rouen Normandie': ("Orchestre de l'Opéra de Rouen Normandie",),
 }
 KEYWORDS = {
- 'Budget et subventions': ('budget','subvention','subventions','deficit','financement','dotation','coupe budgetaire','baisse de financement','aide publique'),
- 'Conditions de travail': ('conditions de travail','temps de travail','remuneration','salaire','salaires','convention collective','risques psychosociaux','souffrance au travail'),
- 'Emploi et recrutement': ('recrutement','licenciement','suppression de poste','suppression de postes','gel des recrutements','offre d emploi','concours de recrutement','auditions et concours','effectifs'),
- 'Gouvernance': ('gouvernance','directeur general','nomination','demission','restructuration','reorganisation','conseil d administration','audit'),
- 'Mobilisation et grève': ('greve','preavis de greve','mobilisation','manifestation','syndicat','syndical','petition','mouvement social'),
+ 'Budget et subventions': ('budget','subvention','subventions','deficit','financement','dotation','coupe budgetaire','baisse de financement','aide publique','desengagement financier','fonds de roulement'),
+ 'Conditions de travail': ('conditions de travail','temps de travail','remuneration','salaire','salaires','convention collective','risques psychosociaux','souffrance au travail','harcelement','heures supplementaires','charge de travail','sante au travail','repos hebdomadaire'),
+ 'Emploi et recrutement': ('recrutement','licenciement','suppression de poste','suppression de postes','gel des recrutements','offre d emploi','concours de recrutement','auditions et concours','postes vacants','non remplacement','non renouvellement'),
+ 'Gouvernance': ('gouvernance','directeur general','nomination','demission','restructuration','reorganisation','conseil d administration','audit','direction generale','chambre regionale des comptes'),
+ 'Mobilisation et grève': ('greve','preavis de greve','mobilisation','manifestation','syndicat','syndical','petition','mouvement social','debrayage'),
 }
+
 REVIEW = ('critique','compte rendu','recension','concert review','opera review','chronique musicale')
-NOT_REVIEW = ('billetterie','agenda','calendrier','programme de saison','abonnement','event listing','veranstaltungskalender')
+NOT_REVIEW = ('billetterie','agenda','calendrier','programme de saison','abonnement','event listing','veranstaltungskalender','ouverture de la billetterie','reservation de billets')
 REVIEW_SITES = ('bachtrack.com','resmusica.com','forumopera.com','concertclassic.com','classykeo.com','olyrix.com')
 
 def fold(value):

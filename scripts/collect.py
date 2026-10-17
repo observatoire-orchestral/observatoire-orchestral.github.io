@@ -28,67 +28,7 @@ HEADERS = {
 SESSION = requests.Session()
 SESSION.headers.update({'User-Agent': 'Observatoire-SUD-ONPL/2.0 (public RSS monitoring)'})
 
-ORCHESTRAS = {
-    'ONPL': '("ONPL" OR "Orchestre National des Pays de la Loire")',
-    'Angers Nantes Opéra': '("Angers Nantes Opéra" OR "Angers Nantes Opera" OR "Angers-Nantes Opéra")',
-    'Orchestre de Paris': '"Orchestre de Paris"',
-    'Orchestre national de Lyon': '"Orchestre national de Lyon"',
-    'Orchestre national de Lille': '"Orchestre national de Lille"',
-    'Orchestre national de Bordeaux Aquitaine': '("Opéra de Bordeaux" OR "Opéra National de Bordeaux" OR "Orchestre National Bordeaux Aquitaine" OR "ONBA")',
-    'Orchestre national du Capitole de Toulouse': '"Orchestre national du Capitole"',
-    'Orchestre philharmonique de Strasbourg': '"Orchestre philharmonique de Strasbourg"',
-    'Orchestre national de Metz': '"Orchestre national de Metz"',
-    'Orchestre national de Bretagne': '"Orchestre national de Bretagne"',
-    'Orchestre national de Montpellier': '"Orchestre national Montpellier"',
-    'Orchestre de l’Opéra de Nice': '"Opéra de Nice" orchestre',
-    'Orchestre national d’Île-de-France': '"Orchestre national d’Île-de-France"',
-    'Orchestre de l’Opéra de Marseille': '"Opéra de Marseille" orchestre',
-    'Orchestre national Avignon-Provence': '"Orchestre national Avignon-Provence"',
-    'Orchestre national de Cannes': '"Orchestre national de Cannes"',
-}
-
-ORCHESTRA_TERMS = '(budget OR subvention OR grève OR syndicat OR recrutement OR suppression OR emploi OR musicien OR déficit OR restructuration OR communiqué OR rapport)'
-SECTOR = 'Secteur orchestral français'
-SECTOR_QUERIES = [
-    
-    # ONPL — music reviews
-    'site:resmusica.com "Orchestre National des Pays de la Loire"',
-    'site:bachtrack.com "Orchestre National des Pays de la Loire"',
-    'site:forumopera.com "Orchestre National des Pays de la Loire"',
-    'site:concertclassic.com "Orchestre National des Pays de la Loire"',
-    '"ONPL" "critique" concert',
-    '"Orchestre National des Pays de la Loire" "critique"',
-
-    # Critiques musicales — presse spécialisée
-    'site:bachtrack.com "Orchestre de Paris"',
-    'site:bachtrack.com "orchestre national" France',
-    'site:resmusica.com "orchestre" concert',
-    'site:resmusica.com "orchestre national"',
-    'site:forumopera.com "orchestre" critique',
-    'site:forumopera.com "Opéra de Nice"',
-    'site:concertclassic.com "orchestre" critique',
-    'site:concertclassic.com "orchestre national"',
-    'site:sudouest.fr "Opéra de Bordeaux" (subvention OR budget OR financement OR suppression)',
-    '"orchestres permanents" (budget OR financement OR emploi OR syndicat)',
-    '"musiciens d’orchestre" (conditions de travail OR salaire OR emploi OR grève)',
-    '"orchestres symphoniques" (subventions OR financement OR crise OR budget)',
-    '"spectacle vivant" "orchestre" (financement OR emploi OR réforme)',
-    '"ministère de la Culture" orchestres (budget OR financement OR rapport)',
-    '"collectivités territoriales" orchestres (subvention OR budget)',
-    '"convention collective" musiciens orchestre',
-    '"SNAM-CGT" orchestre',
-    '"CGT Spectacle" orchestre',
-    '"SUD Culture" orchestre',
-    '"Cour des comptes" orchestre rapport',
-    '"DRAC" orchestre subvention',
-]
-TOPICS = [
-    ('Budget et subventions', ['budget', 'subvention', 'déficit', 'financement', 'coupe budgétaire', 'dotation']),
-    ('Emploi et recrutement', ['recrut', 'poste', 'emploi', 'licenci', 'effectif', 'suppression', 'concours']),
-    ('Mobilisation et grève', ['grève', 'manifest', 'mobilis', 'préavis', 'syndica', 'pétition']),
-    ('Conditions de travail', ['salaire', 'conditions de travail', 'temps de travail', 'rémunération', 'convention collective']),
-    ('Gouvernance', ['direction', 'directeur général', 'gouvernance', 'réorganisation', 'restructur', 'nomination']),
-]
+from monitoring_queries import ORCHESTRAS, ORCHESTRA_TERMS, SECTOR, SECTOR_QUERIES
 
 
 def clean(value):
