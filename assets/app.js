@@ -273,9 +273,11 @@
       ],
       [
         'category',
-        [...new Set(
-          records.map(x => x.category).filter(Boolean)
-        )]
+        [...new Set([
+  'Critique musicale',
+  ...records.map(x => x.category).filter(Boolean)
+])]
+
       ]
     ];
 
