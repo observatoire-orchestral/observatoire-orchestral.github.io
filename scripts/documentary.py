@@ -158,7 +158,11 @@ def discover(store, session=None, path=None):
             article = {'url': link[:2000], 'title': title or link.rsplit('/',1)[-1],
                        'summary': summary or 'Publication documentaire publique',
                        'source': source['source'][:200],
-                       'orchestra': source.get('orchestra') or SECTOR,
+                       'orchestra': identify_orchestra(
+    title + ' ' + summary,
+    source.get('orchestra') or SECTOR
+),
+
                        'category': label(combined), 'published_at': published,
                        'is_auto': True, 'review_status': 'unreviewed'}
             store(article)
