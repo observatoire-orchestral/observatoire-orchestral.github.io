@@ -1,0 +1,41 @@
+name: Historical reclassification (manual)
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'Preview first. Apply only after reviewing approved CSV.'
+        required: true
+        default: preview
+        type: choice
+        options:
+          - preview
+          - apply
+      confirmation:
+        description: 'For apply only, type APPLY_APPROVED_CHANGES'
+        required: false
+        default: ''
+permissions:
+  contents: read
+jobs:
+  historical_audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r requirements.txt
+      - name: Preview or apply
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          AUDIT_MODE: ${{ inputs.mode }}
+          AUDIT_CONFIRM: ${{ inputs.confirmation }}
+        run: python scripts/reclassify_history.py --mode "$AUDIT_MODE" --confirm "$AUDIT_CONFIRM"
+      - uses: actions/upload-artifact@v4
+        if: ${{ inputs.mode == 'preview' }}
+        with:
+          name: historical-reclassification-preview
+          path: reclassification_report/
+          retention-days: 7
