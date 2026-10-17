@@ -253,6 +253,14 @@ def main():
             print('ERROR', errors[-1], file=sys.stderr)
         time.sleep(0.5)
 
+    # Collect concert and opera reviews for all listed orchestras
+    try:
+        from reviews import run as run_reviews
+        proposed += run_reviews(store, google_news)
+    except Exception as exc:
+        print(f'REVIEW WARNING: {exc}', file=sys.stderr)
+
+
     try:
         feeds = extra_feeds()
     except Exception as exc:
