@@ -114,15 +114,37 @@ def published(entry):
             pass
     return None
 
-
 def normalize(entry, orchestra, fallback_source):
     title = clean(entry.get('title'))
     link = (entry.get('link') or '').strip()
+
     if not title or urlparse(link).scheme not in ('http', 'https'):
         return None
+
     summary = clean(entry.get('summary') or entry.get('description'))
     source_info = entry.get('source') or {}
-    source = clean(source_info.get('title') if hasattr(source_info, 'get') else '') or fallback_source
+    source = clean(
+        source_info.get('title')
+        if hasattr(source_info, 'get') else ''
+    ) or fallback_source
+
+    # Recognise specialist music-review publications
+    review_sources = (
+        'bachtrack',
+        'resmusica',
+        'forumopera',
+        'forum opéra',
+        'concertclassic',
+    )
+
+    source_text = source.casefold()
+    domain = urlparse(link).netloc.casefold()
+
+    is_review_source = any(
+        name in source_text or name.replace(' ', '') in domain
+        for name in review_sources
+    )
+
     return {
         'url': link,
         'title': title,
@@ -131,18 +153,14 @@ def normalize(entry, orchestra, fallback_source):
         'orchestra': orchestra,
         'category': (
             'Critique musicale'
-            if (
-                'bachtrack.com' in urlparse(link).netloc.lower()
-                or 'bachtrack' in source.casefold()
-            )
+            if is_review_source
             else category(title + ' ' + summary)
         ),
-
-
         'published_at': published(entry),
         'is_auto': True,
         'review_status': 'validated',
     }
+
 
 
 def read_feed(feed_url, orchestra, fallback_source, max_items=15):
