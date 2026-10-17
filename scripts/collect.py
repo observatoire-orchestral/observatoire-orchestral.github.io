@@ -139,7 +139,9 @@ def store(article):
     A later phase can update existing articles after human-approved rules.
     No read-before-write is required: the unique URL constraint handles duplicates.
     """
-    from classification import prepare
+    from classification import prepare, clearly_irrelevant
+    if clearly_irrelevant(article.get("title", ""), article.get("summary", ""), article.get("source", ""), article.get("url", "")):
+        return
     item = prepare(article)
     response = SESSION.post(
         URL + '/rest/v1/articles?on_conflict=url',

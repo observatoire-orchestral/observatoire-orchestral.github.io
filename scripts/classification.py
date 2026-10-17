@@ -43,9 +43,13 @@ KEYWORDS = {
  'Mobilisation et grève': ('greve','preavis de greve','mobilisation','manifestation','syndicat','syndical','petition','mouvement social','debrayage'),
 }
 
-REVIEW = ('critique','compte rendu','recension','concert review','opera review','chronique musicale')
-NOT_REVIEW = ('billetterie','agenda','calendrier','programme de saison','abonnement','event listing','veranstaltungskalender','ouverture de la billetterie','reservation de billets')
+REVIEW = ('critique', 'compte rendu', 'recension', 'concert review', 'opera review', 'chronique musicale', 'notre critique')
+NOT_REVIEW = ('billetterie', 'agenda', 'calendrier', 'programme de saison', 'abonnement', 'event listing', 'listing and tickets', 'tickets', 'reservation de billets', 'archives des', 'parcours de visite', 'maquette', 'programme complet')
 REVIEW_SITES = ('bachtrack.com','resmusica.com','forumopera.com','concertclassic.com','classykeo.com','olyrix.com')
+GOVERNANCE_TITLES = ('nouvelle directrice', 'nouveau directeur', 'nomme directeur', 'nommee directrice', 'renouvele a la tete', 'reconduit a la tete', 'prend la direction', 'direction de l orchestre', 'directeur musical nomme', 'directrice musicale nommee')
+BUDGET_TITLES = ('trop chers', 'trop cher', 'coutent trop', 'financement en baisse')
+# Narrow, title-based exclusion only. We avoid discarding uncertain articles.
+IRRELEVANT_TITLES = ('listing and tickets', 'ouverture de la billetterie', 'reservation de billets', 'archives des', 'parcours de visite', 'programme complet')
 
 def fold(value):
  value = unicodedata.normalize('NFKD',str(value or '').casefold())
@@ -57,18 +61,29 @@ def is_review_source(source='',url=''):
  domain=urlparse(url or '').hostname or ''
  domain=domain.lower().removeprefix('www.')
  return any(domain == site or domain.endswith('.'+site) for site in REVIEW_SITES) or any(has(fold(source),site.split('.')[0]) for site in REVIEW_SITES)
+def clearly_irrelevant(title, summary='', source='', url=''):
+ heading=fold(title)
+ if any(has(heading,x) for x in IRRELEVANT_TITLES):
+  return True
+ # Avoid rejecting actual reporting just because it mentions a concert.
+ if ('jumping de bordeaux' in heading and 'equestre' in heading) or 'asm rugby' in heading:
+  return True
+ return False
+
 def classify(title,summary='',suggested='Autres',source='',url=''):
  heading,body=fold(title),fold(summary)
- excluded=any(has(heading,x) for x in NOT_REVIEW)
  scores={k:3*sum(has(heading,w) for w in words)+sum(has(body,w) for w in words) for k,words in KEYWORDS.items()}
+ if any(has(heading,x) for x in GOVERNANCE_TITLES): scores['Gouvernance']+=6
+ if any(has(heading,x) for x in BUDGET_TITLES) and ('orchestre' in heading or 'musicien' in heading): scores['Budget et subventions']+=6
+ # Subject-matter reporting outranks source reputation or review wording.
  best=max(scores,key=scores.get)
- # Explicit review heading or known review source, but not a season/booking listing.
- if not excluded and (any(has(heading,x) for x in REVIEW) or is_review_source(source,url)):
-  return 'Critique musicale'
  if scores[best]: return best
- # Existing category is retained when evidence is inconclusive. This is essential
- # for the audit; absence of a keyword is not grounds for downgrading a record.
- if suggested in CATEGORIES: return suggested
+ excluded=any(has(heading,x) for x in NOT_REVIEW)
+ if not excluded and any(has(heading,x) for x in REVIEW): return 'Critique musicale'
+ # Source alone does not prove the article is a performance review.
+ # Preserve an explicit upstream review designation only if not an obvious listing.
+ if suggested=='Critique musicale' and not excluded: return suggested
+ if suggested in CATEGORIES and suggested!='Critique musicale': return suggested
  return 'Autres'
 def organisations(title,summary=''):
  t=fold(title+' '+summary)
