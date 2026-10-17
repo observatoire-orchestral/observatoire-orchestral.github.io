@@ -50,6 +50,16 @@ ORCHESTRA_TERMS = '(budget OR subvention OR grève OR syndicat OR recrutement OR
 SECTOR = 'Secteur orchestral français'
 SECTOR_QUERIES = [
     
+    # Critiques musicales — presse spécialisée
+    'site:bachtrack.com "Orchestre de Paris"',
+    'site:bachtrack.com "orchestre national" France',
+    'site:resmusica.com "orchestre" concert',
+    'site:resmusica.com "orchestre national"',
+    'site:forumopera.com "orchestre" critique',
+    'site:forumopera.com "Opéra de Nice"',
+    'site:concertclassic.com "orchestre" critique',
+    'site:concertclassic.com "orchestre national"',
+
     'site:bachtrack.com/fr_FR "orchestre" critique',
     'site:bachtrack.com/fr_FR "concert" France',
     'site:bachtrack.com "Orchestre de Paris" review',
