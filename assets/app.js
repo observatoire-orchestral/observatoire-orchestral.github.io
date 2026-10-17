@@ -40,6 +40,7 @@
   let canReview = false;
   let records = [];
   let shown = 0;
+  let suggestions = new Map();
 
   const pageSize = 40;
 
@@ -263,6 +264,21 @@
     }
 
     records = all;
+    suggestions = new Map();
+    let sgOffset = 0;
+    while (true) {
+      const {data: sg, error: sgError} = await db.from('editorial_suggestions')
+        .select('article_id,category_snapshot,proposed_category,orchestra_snapshot,proposed_orchestra,relevance,relevance_reason,confidence,category_reason')
+        .order('article_id').range(sgOffset, sgOffset + 499);
+      if (sgError) {
+        notice('Propositions éditoriales indisponibles : vérifiez la migration et l’import Phase 6.1. ' + sgError.message, true);
+        break;
+      }
+      for (const item of sg || []) suggestions.set(item.article_id, item);
+      if (!sg || sg.length < 500) break;
+      sgOffset += 500;
+    }
+    if ($('editorialCount')) $('editorialCount').textContent = suggestions.size.toLocaleString('fr-FR');
     $('last').textContent = records.length ? 'Dernière collecte visible : ' + new Date(Math.max(...records.map(a => Date.parse(a.found_at) || 0))).toLocaleDateString('fr-FR') : ''; 
     populate();
     shown = pageSize;
@@ -327,6 +343,18 @@
       (
         !$('status').value ||
         a.review_status === $('status').value
+      ) && (
+        !$('editorialFilter')?.value ||
+        (() => {
+          const sg = suggestions.get(a.id);
+          const v = $('editorialFilter').value;
+          if (v === 'missing') return !sg;
+          if (!sg) return false;
+          if (v === 'category') return sg.proposed_category !== sg.category_snapshot;
+          if (v === 'relevance') return sg.relevance === 'à examiner';
+          if (v === 'relevant') return sg.relevance === 'probablement pertinent';
+          return true;
+        })()
       )
     );
   }
@@ -387,6 +415,25 @@
         </div>
       `;
 
+      const suggestion = suggestions.get(a.id);
+      if (suggestion) {
+        const panel = document.createElement('div');
+        panel.className = 'editorial-suggestion';
+        const different = suggestion.proposed_category !== suggestion.category_snapshot;
+        const stale = a.category !== suggestion.category_snapshot || a.orchestra !== suggestion.orchestra_snapshot;
+        panel.innerHTML = `<strong>Pré-analyse éditoriale · ${esc(suggestion.confidence)}</strong>
+          <div>Pertinence : ${esc(suggestion.relevance)} — ${esc(suggestion.relevance_reason)}</div>
+          ${different ? `<div>Catégorie proposée : <b>${esc(suggestion.proposed_category)}</b>${stale ? ' (à réévaluer : classement modifié)' : ''}</div>` : ''}
+          <small>Proposition indicative, non validée automatiquement.</small>`;
+        el.querySelector('.review').before(panel);
+        if (canReview && different && !stale) {
+          const accept = document.createElement('button');
+          accept.className = 'secondary';
+          accept.textContent = 'Appliquer la catégorie proposée';
+          accept.onclick = () => applySuggestion(a, suggestion);
+          panel.append(accept);
+        }
+      }
       if (canReview) {
         const row = el.querySelector('.review');
 
@@ -436,6 +483,24 @@
     render();
   }
 
+  async function applySuggestion(a, suggestion) {
+    if (!canReview || !currentUser) return;
+    if (!confirm('Appliquer cette catégorie ? Le statut de validation actuel sera conservé.')) return;
+    const {data,error} = await db.from('articles')
+      .update({category: suggestion.proposed_category})
+      .eq('id', a.id).eq('category', suggestion.category_snapshot)
+      .eq('orchestra', suggestion.orchestra_snapshot)
+      .select('id,category');
+    if (error || !data?.length) {
+      notice(error ? 'Correction impossible : ' + error.message : 'Article modifié : actualisez.', true);
+      return;
+    }
+    a.category = data[0].category;
+    populate();
+    notice('Catégorie corrigée. Statut de validation conservé.');
+    render();
+  }
+
   async function editArticle(a) {
     if (!canReview || !currentUser) return;
     const category = prompt('Catégorie (laissez vide pour annuler) :', a.category || 'Autres');
@@ -465,7 +530,8 @@
     'search',
     'orchestra',
     'category',
-    'status'
+    'status',
+    'editorialFilter'
   ]) {
     $(id).addEventListener(
       id === 'search' ? 'input' : 'change',
