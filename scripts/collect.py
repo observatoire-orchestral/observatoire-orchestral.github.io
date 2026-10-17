@@ -156,7 +156,11 @@ def normalize(entry, orchestra, fallback_source):
         'title': title,
         'summary': summary,
         'source': source[:200],
-        'orchestra': orchestra,
+        'orchestra': identify_orchestra(
+    title + ' ' + summary,
+    orchestra
+),
+
         'category': (
             'Critique musicale'
             if is_review_source
