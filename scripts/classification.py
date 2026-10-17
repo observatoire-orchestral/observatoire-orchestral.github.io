@@ -39,7 +39,7 @@ KEYWORDS = {
  'Budget et subventions': ('budget','subvention','subventions','deficit','financement','dotation','coupe budgetaire','baisse de financement','aide publique','desengagement financier','fonds de roulement'),
  'Conditions de travail': ('conditions de travail','temps de travail','remuneration','salaire','salaires','convention collective','risques psychosociaux','souffrance au travail','harcelement','heures supplementaires','charge de travail','sante au travail','repos hebdomadaire'),
  'Emploi et recrutement': ('recrutement','licenciement','suppression de poste','suppression de postes','gel des recrutements','offre d emploi','concours de recrutement','auditions et concours','postes vacants','non remplacement','non renouvellement'),
- 'Gouvernance': ('gouvernance','directeur general','nomination','demission','restructuration','reorganisation','conseil d administration','audit','direction generale','chambre regionale des comptes'),
+ 'Gouvernance': ('gouvernance','directeur general','nomination','demission','restructuration','reorganisation','conseil d administration','audit','direction generale','chambre regionale des comptes','nouvelle directrice','nouveau directeur','directeur musical','directrice musicale','renouvellement de mandat','nomme a la tete','nommee a la tete'),
  'Mobilisation et grève': ('greve','preavis de greve','mobilisation','manifestation','syndicat','syndical','petition','mouvement social','debrayage'),
 }
 
@@ -49,7 +49,7 @@ REVIEW_SITES = ('bachtrack.com','resmusica.com','forumopera.com','concertclassic
 GOVERNANCE_TITLES = ('nouvelle directrice', 'nouveau directeur', 'nomme directeur', 'nommee directrice', 'renouvele a la tete', 'reconduit a la tete', 'prend la direction', 'direction de l orchestre', 'directeur musical nomme', 'directrice musicale nommee')
 BUDGET_TITLES = ('trop chers', 'trop cher', 'coutent trop', 'financement en baisse')
 # Narrow, title-based exclusion only. We avoid discarding uncertain articles.
-IRRELEVANT_TITLES = ('listing and tickets', 'ouverture de la billetterie', 'reservation de billets', 'archives des', 'parcours de visite', 'programme complet')
+IRRELEVANT_TITLES = ('listing and tickets', 'ouverture de la billetterie', 'reservation de billets', 'archives des', 'parcours de visite', 'programme complet', 'acheter vos billets', 'billets disponibles', 'calendrier des concerts')
 
 def fold(value):
  value = unicodedata.normalize('NFKD',str(value or '').casefold())
@@ -82,7 +82,7 @@ def classify(title,summary='',suggested='Autres',source='',url=''):
  if not excluded and any(has(heading,x) for x in REVIEW): return 'Critique musicale'
  # Source alone does not prove the article is a performance review.
  # Preserve an explicit upstream review designation only if not an obvious listing.
- if suggested=='Critique musicale' and not excluded: return suggested
+ if suggested=='Critique musicale' and not excluded and any(has(heading,x) for x in ('compte rendu','critique','recital','concert','opera','symphonie','representation')): return suggested
  if suggested in CATEGORIES and suggested!='Critique musicale': return suggested
  return 'Autres'
 def organisations(title,summary=''):

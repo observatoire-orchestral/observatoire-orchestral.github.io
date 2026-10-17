@@ -26,7 +26,7 @@ HEADERS = {
     'Prefer': 'resolution=ignore-duplicates,return=minimal',
 }
 SESSION = requests.Session()
-SESSION.headers.update({'User-Agent': 'Observatoire-SUD-ONPL/2.0 (public RSS monitoring)'})
+SESSION.headers.update({'User-Agent': 'Observatoire-Orchestral/4.0 (public RSS monitoring)'})
 
 from monitoring_queries import ORCHESTRAS, ORCHESTRA_TERMS, SECTOR, SECTOR_QUERIES
 
@@ -133,6 +133,8 @@ def extra_feeds():
 
 
 
+STATS = {'submitted': 0, 'excluded': 0, 'inserted': 0, 'duplicates_or_ignored': 0}
+
 def store(article):
     """Classify once, insert only new URLs, preserve all existing records.
 
@@ -141,17 +143,26 @@ def store(article):
     """
     from classification import prepare, clearly_irrelevant
     if clearly_irrelevant(article.get("title", ""), article.get("summary", ""), article.get("source", ""), article.get("url", "")):
-        return
+        STATS['excluded'] += 1
+        return False
     item = prepare(article)
     response = SESSION.post(
         URL + '/rest/v1/articles?on_conflict=url',
         json=item,
-        headers={**HEADERS, 'Prefer': 'resolution=ignore-duplicates,return=minimal',
+        headers={**HEADERS, 'Prefer': 'resolution=ignore-duplicates,return=representation',
                  'Accept': 'application/json'},
         timeout=25,
     )
     if not response.ok:
         raise RuntimeError(f'{response.status_code}: {response.text[:350]}')
+    STATS['submitted'] += 1
+    try:
+        inserted = len(response.json()) if response.content else 0
+    except (ValueError, TypeError):
+        inserted = 0
+    STATS['inserted'] += inserted
+    STATS['duplicates_or_ignored'] += int(not inserted)
+    return bool(inserted)
 
 
 def main():
@@ -205,7 +216,7 @@ def main():
     except Exception as exc:
         print(f'DOCUMENTARY WARNING: {exc}', file=sys.stderr)
 
-    print(f'Collecte terminée : {proposed} entrées proposées (doublons protégés, corrections prudentes), {len(errors)} erreurs')
+    print(f"BILAN PHASE 4: candidates={proposed}, submitted={STATS['submitted']}, inserted={STATS['inserted']}, excluded={STATS['excluded']}, duplicates_or_ignored={STATS['duplicates_or_ignored']}, errors={len(errors)}")
     if errors:
         sys.exit(1)
 
