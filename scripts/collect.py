@@ -50,6 +50,11 @@ ORCHESTRA_TERMS = '(budget OR subvention OR grève OR syndicat OR recrutement OR
 SECTOR = 'Secteur orchestral français'
 SECTOR_QUERIES = [
     
+    'site:bachtrack.com/fr_FR "orchestre" critique',
+    'site:bachtrack.com/fr_FR "concert" France',
+    'site:bachtrack.com "Orchestre de Paris" review',
+    'site:bachtrack.com "Orchestre National des Pays de la Loire"',
+
     'site:sudouest.fr "Opéra de Bordeaux" (subvention OR budget OR financement OR suppression)',
     '"orchestres permanents" (budget OR financement OR emploi OR syndicat)',
     '"musiciens d’orchestre" (conditions de travail OR salaire OR emploi OR grève)',
