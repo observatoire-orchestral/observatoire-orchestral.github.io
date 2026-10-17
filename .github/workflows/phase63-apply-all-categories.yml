@@ -1,0 +1,29 @@
+name: Phase 6.3 - Appliquer toutes les propositions de catégories
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "preview = simulation ; apply = appliquer les propositions"
+        required: true
+        type: choice
+        options: [preview, apply]
+        default: preview
+permissions:
+  contents: read
+jobs:
+  categories:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r requirements.txt
+      - name: Appliquer toutes les propositions préliminaires
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          MODE: ${{ inputs.mode }}
+        run: |
+          if [ "$MODE" = apply ]; then python scripts/phase63_apply_all_suggestions.py --apply; else python scripts/phase63_apply_all_suggestions.py; fi

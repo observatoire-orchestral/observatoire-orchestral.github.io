@@ -1,0 +1,37 @@
+name: Phase 6.4 - Reclassement editorial complet
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "preview (sans changement) ou apply (appliquer les categories)"
+        required: true
+        type: choice
+        options:
+          - preview
+          - apply
+        default: preview
+jobs:
+  recategorize:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r requirements.txt
+      - name: Reclassement
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          MODE: ${{ inputs.mode }}
+        run: |
+          if [ "$MODE" = "apply" ]; then
+            python scripts/phase64_apply.py --apply
+          else
+            python scripts/phase64_apply.py
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: phase64-results-${{ inputs.mode }}
+          path: audits/phase64_last_run.csv
