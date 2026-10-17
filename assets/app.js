@@ -230,7 +230,7 @@
       const { data, error } = await db
         .from('articles')
         .select(
-          'id,title,url,source,published_at,found_at,orchestra,category,summary,review_status,is_auto,reviewed_by'
+          'id,title,url,source,published_at,found_at,orchestra,organizations,category,summary,review_status,is_auto,reviewed_by'
         )
         .order('published_at', {
           ascending: false,
@@ -268,7 +268,7 @@
       [
         'orchestra',
         [...new Set(
-          records.map(x => x.orchestra).filter(Boolean)
+          records.flatMap(x => (x.organizations?.length ? x.organizations : [x.orchestra])).filter(Boolean)
         )]
       ],
       [
@@ -303,7 +303,7 @@
     return records.filter(a =>
       (
         !q ||
-        [a.title, a.summary, a.source, a.orchestra]
+        [a.title, a.summary, a.source, a.orchestra, ...(a.organizations || [])]
           .some(x =>
             String(x || '')
               .toLocaleLowerCase('fr')
@@ -312,7 +312,7 @@
       ) &&
       (
         !$('orchestra').value ||
-        a.orchestra === $('orchestra').value
+        (a.organizations?.includes($('orchestra').value) || (!a.organizations?.length && a.orchestra === $('orchestra').value))
       ) &&
       (
         !$('category').value ||
@@ -336,7 +336,7 @@
 
     $('orchCount').textContent = new Set(
       records
-        .map(x => x.orchestra)
+        .flatMap(x => (x.organizations?.length ? x.organizations : [x.orchestra]))
         .filter(x => x && x !== 'Autres orchestres')
     ).size;
 
@@ -366,7 +366,7 @@
           </a>
         </h2>
         <span class="pill">
-          ${esc(a.orchestra || 'Autres orchestres')}
+          ${esc(a.organizations?.length ? a.organizations.join(' · ') : (a.orchestra || 'Autres orchestres'))}
         </span>
         <span class="pill">
           ${esc(a.category || 'Général')}
@@ -455,6 +455,7 @@
     const cols = [
       'published_at',
       'orchestra',
+      'organizations',
       'category',
       'title',
       'source',
@@ -467,7 +468,7 @@
       ...filtered().map(a =>
         cols.map(k =>
           '"' +
-          String(a[k] ?? '').replaceAll('"', '""') +
+          String(Array.isArray(a[k]) ? a[k].join(' | ') : (a[k] ?? '')).replaceAll('"', '""') +
           '"'
         ).join(',')
       )
