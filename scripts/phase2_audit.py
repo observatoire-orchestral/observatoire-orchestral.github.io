@@ -27,13 +27,13 @@ def report(rows, output):
         title = row.get('title') or ''
         summary = row.get('summary') or ''
         old_cat = row.get('category') or ''
-        suggested_cat = classify(title, summary)
+        suggested_cat = classify(title, summary, old_cat, row.get('source') or '', row.get('url') or '')
         names = organisations(title, summary)
         current = row.get('organizations') or []
         # A report, not an automatic correction.
         reasons = []
         if old_cat != suggested_cat:
-            reasons.append('category_candidate')
+            reasons.append('category_candidate_review_manually')
         if set(names) - set(current):
             reasons.append('additional_organization_candidate')
         if reasons:
