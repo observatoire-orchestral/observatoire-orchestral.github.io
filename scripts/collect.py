@@ -29,7 +29,7 @@ SESSION = requests.Session()
 SESSION.headers.update({'User-Agent': 'Observatoire-SUD-ONPL/2.0 (public RSS monitoring)'})
 
 ORCHESTRAS = {
-    'ONPL': '"Orchestre National des Pays de la Loire"',
+    'ONPL': '("ONPL" OR "Orchestre National des Pays de la Loire")',
     'Orchestre de Paris': '"Orchestre de Paris"',
     'Orchestre national de Lyon': '"Orchestre national de Lyon"',
     'Orchestre national de Lille': '"Orchestre national de Lille"',
